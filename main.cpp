@@ -1,26 +1,64 @@
 /////////////////////////////////////////////////////////////////////////////////////////
-/*****************************[           FATOU           *******************************
+/*****************************[           FATOU         ]********************************
 *
 * File: main.cpp
 * Purpose: 
 *
-* Copyright 2017 EricSkaliks
+* Copyright 2017 Eric Skaliks
 *
 */
+
+/*
+TODO:
+
+Fast Noise Sampler
+Navigation
+Parameters!
+View Modes! Iteration-to-intensity-curve, Convergence-to-colormap...
+Generic Animation! Animate Parameters using node-editor and simple scripts!
+Linux Support!
+Compile settings to optimized shader
+Quaternion-Solver?
+Export / Render picture and Video
+Mathematical Features! Detect roots, approximate Julia-Set, Plot Trajectory
+use CMake!
+
+3D: http://hirnsohle.de/test/fractalLab/
+Lighting: http://www.xenodream.com/galleries.htm
+Filters [Xaos] (Sharpening, Bluring, Edge-Detection, Transformation, Projection...)
+http://www.chaospro.de/features.php
+*/
+
+
 
 #include "stdafx.h"
 #include "app.h"
 
 
 pointer<app> APP;
+nk_context* ctx;
 
 int _main(int argc, char **argv) {
 	try {
-		glutInit(&argc, argv);
-		glutInitDisplayMode(/*GLUT_DEPTH |*/ /*GLUT_SINGLE*/  GLUT_DOUBLE | GLUT_RGBA);
-		glutInitWindowPosition(100, 100);
-		glutInitWindowSize(800, 600);
-		GLuint window = glutCreateWindow("Fatou");
+		glfwSetErrorCallback([](int e, const char *d) -> void { fatalNote(std::to_string(e) + " " + string(d)); });
+		glfwInit();
+		glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+		glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
+		glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+#ifdef __APPLE__
+		glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE); // uncomment this statement to fix compilation on OS X
+#endif
+
+		GLFWwindow* window = glfwCreateWindow(INITIAL_W, INITIAL_H, "Fatou", NULL, NULL);
+		if (window == NULL) {
+			fatalNote("Failed creating Window.");
+			exit(-1);
+		}
+		glfwMakeContextCurrent(window);
+		glfwSetKeyCallback(window, [](GLFWwindow*, int key, int, int action, int)->void { 
+			if(action == GLFW_PRESS || action == GLFW_REPEAT)
+				APP->keypressed(key);  
+		});
 
 		GLenum glew_status = glewInit();
 		if (glew_status != GLEW_OK) {
@@ -29,31 +67,52 @@ int _main(int argc, char **argv) {
 		if (!GLEW_VERSION_2_0) {
 			fatalNote("Error: your graphic card does not support OpenGL 2.0\n");
 		}
+		glErrors("glfw::init");
 
-		// init App
-		APP.reset(new app());
+		//////////////////////////////////
 
-		// Setup callbacks
-		glutKeyboardFunc([](unsigned char key, int x, int y) -> void { APP->keypressed(key); });
-		glutReshapeFunc([](int w, int h) -> void { APP->reshape(w, h); });
-		glutIdleFunc([]() -> void { APP->render(); });
-		glutDisplayFunc([]() -> void { APP->display(); });
-		glutMouseFunc([](int button, int state, int x, int y) -> void {
-			mousebutton mb = mousebutton_none;
-			switch (button) {
-			case GLUT_LEFT_BUTTON: mb = mousebutton_left; break;
-			case GLUT_MIDDLE_BUTTON: mb = mousebutton_middle; break;
-			case GLUT_RIGHT_BUTTON: mb = mousebutton_right; break;
-			}
-			if (mb != mousebutton_none)
-				APP->mousestatechanged(mb, state == GLUT_DOWN);
-		});
-		glutMotionFunc([](int x, int y) -> void { APP->mousemove(x, y); });
-		glutPassiveMotionFunc([](int x, int y) -> void { APP->mousemove(x, y); });
+		GLint texture_units = 0;
+		glGetIntegerv(GL_MAX_TEXTURE_IMAGE_UNITS, &texture_units);
+		glErrors("main::getMaxTextureImageUnits");
+		if (texture_units < 16) {
+			fatalNote("GPU doesn't support 16 textures per fragment shader");
+		}
 
-		glutMainLoop();
+		///////////////////////////////////
 
-		glutDestroyWindow(window);
+		ctx = nk_glfw3_init(window, NK_GLFW3_INSTALL_CALLBACKS);
+		{
+			struct nk_font_atlas *atlas;
+			nk_glfw3_font_stash_begin(&atlas);
+			nk_glfw3_font_stash_end();
+		}
+		
+		APP.reset(new app(window, ctx));
+
+		glfwSetFramebufferSizeCallback(window, [](GLFWwindow* window, int w, int h) -> void { APP->reshape(w, h); });
+		glErrors("glfw::callbacks");
+		
+		///////////////////////////////////
+
+		//static unsigned int lastFrameTime = gtimeGet();
+
+		while (!glfwWindowShouldClose(window)) {
+
+			glfwPollEvents();
+
+			if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
+				glfwSetWindowShouldClose(window, true);
+			
+			APP->logic();
+			APP->render();
+			APP->display();
+
+			/*unsigned int delta_t = gtimeGet() - lastFrameTime;
+			if (delta_t < (1000 / MaxFRate))
+				Sleep(1000 / MaxFRate - delta_t);
+			lastFrameTime = gtimeGet();
+			*/
+		}
 	}
 	catch (const exception &e) {
 		fatalNote(string("Exception: ") + e.what());
@@ -67,4 +126,6 @@ int _main(int argc, char **argv) {
 void _exit() {
 	// force deallocation
 	APP.reset(0, false);
+	nk_glfw3_shutdown();
+	glfwTerminate();
 }

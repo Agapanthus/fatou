@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////////////////////
-/*****************************[           FATOU           *******************************
+/*****************************[           FATOU         ]********************************
 *
 * File: data.inl
 * Purpose: Shaders and Data.
@@ -10,6 +10,15 @@
 
 #pragma once
 #include "stdafx.h"
+
+
+const string viewtexture(
+	"uniform sampler2D screenTexture;"
+	"in vec2 TexCoords;"
+	"void main() {"
+	"	gl_FragColor = texture(screenTexture, TexCoords);"
+	"}");
+
 
 const string mainFragmentShader(
 	"uniform sampler2D screenTexture;"

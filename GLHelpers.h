@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////////////////////////
-/*****************************[           FATOU           *******************************
+/*****************************[           FATOU         ]********************************
 *
 * File: GLHelpers.h
 * Purpose: auxiliary classes.
@@ -17,6 +17,9 @@
 void glErrors(const char* wheres);
 unsigned int gtimeGet();
 
+// Available GPURAM (for textures) in kilobytes. -1 if unknown.
+int getGPURAM();
+
 /////////////////////////////////////////////////////////////////////////////////////////
 /*****************************[         shader          ]*******************************/
 
@@ -26,8 +29,7 @@ public:
 	~shader();
 	void use();
 	GLint getUniform(const string &name);
-
-private:
+protected:
 	GLuint program;
 	GLuint upload(const string &shader, GLenum shaderType);
 };
@@ -41,21 +43,60 @@ public:
 	texture(const std::string &filename);
 	~texture();
 	void use(GLuint textureID = UINT32_MAX);
-private:
+protected:
 	void init(const std::vector<unsigned char> &image, unsigned int width, unsigned int height);
 	GLuint tex;
 };
-
 
 /////////////////////////////////////////////////////////////////////////////////////////
 /*****************************[          VAO            ]*******************************/
 
 class vao {
 public:
-	vao(const float* data, GLsizeiptr dataSize, GLsizei faces);
+	vao(const float* data, GLsizeiptr dataSize, GLsizei faces, bool dynamic = false);
+	void update(const float* data, GLsizeiptr dataSize, GLsizei faces);
 	void draw();
 	~vao();
-private:
+protected:
 	GLuint vaodata, vbodata;
 	GLsizei faces;
+	bool dynamic;
+};
+
+/////////////////////////////////////////////////////////////////////////////////////////
+/*****************************[          sQuad          ]*******************************/
+
+class sQuad : protected vao {
+public:
+	sQuad();
+	void draw(ARect pos, ARect post, bool transTexCoord = false);
+	~sQuad();
+protected:
+	float quadVertices[24];
+};
+
+/////////////////////////////////////////////////////////////////////////////////////////
+/*****************************[       Sync buffer       ]*******************************/
+
+class syncBuffer {
+public:
+	syncBuffer(int w, int h, bool useMipmap, GLuint quality = GL_LINEAR, GLuint qualityM = GL_NEAREST);
+	~syncBuffer();
+	void writeTo(std::function<void(void)> content);
+	void scale(int w, int h, bool useMipmap);
+	void readFrom(GLuint textureID = UINT32_MAX);
+protected:
+	GLuint framebuffer, rbo, tex;
+	int w, h;
+	bool useMipmap;
+	GLuint quality;
+};
+
+/////////////////////////////////////////////////////////////////////////////////////////
+/*****************************[       Async buffer      ]*******************************/
+
+class asyncBuffer {
+public:
+	asyncBuffer();
+	~asyncBuffer();
 };

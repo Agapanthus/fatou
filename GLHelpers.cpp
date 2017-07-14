@@ -28,6 +28,20 @@ unsigned int gtimeGet() {
 #error IMPL
 #endif
 
+int getGPURAM() {
+#define GPU_MEMORY_INFO_TOTAL_AVAILABLE_MEMORY_NVX 0x9048
+#define VBO_FREE_MEMORY_ATI 0x87FB
+#define TEXTURE_FREE_MEMORY_ATI 0x87FC
+#define RENDERBUFFER_FREE_MEMORY_ATI 0x87FD
+	glGetError();
+	int values[4] = { 0,0,0,0 };
+	glGetIntegerv(GPU_MEMORY_INFO_TOTAL_AVAILABLE_MEMORY_NVX, values);
+	if (glGetError() == GL_NO_ERROR) return values[0];
+	glGetIntegerv(TEXTURE_FREE_MEMORY_ATI, values);
+	if (glGetError() == GL_NO_ERROR) return values[0];
+	return -1;
+}
+
 /////////////////////////////////////////////////////////////////////////////////////////
 /*****************************[        Shader           ]*******************************/
 
@@ -109,6 +123,7 @@ GLint shader::getUniform(const string &name) {
 	GLint uniform = glGetUniformLocation(program, name.c_str());
 	if (uniform == -1)
 		fatalNote("Failed binding uniform " + name);
+	glErrors("shader::getuniform");
 	return uniform;
 }
 
@@ -162,8 +177,8 @@ texture::~texture() {
 	glDeleteTextures(1, &(texture::tex));
 }
 void texture::use(GLuint textureID) {
-	//if(textureID != UINT32_MAX)
-	//	glActiveTexture(textureID);
+	if(textureID != UINT32_MAX)
+		glActiveTexture(textureID);
 	glBindTexture(GL_TEXTURE_2D, texture::tex);
 }
 
@@ -172,14 +187,14 @@ void texture::use(GLuint textureID) {
 /*****************************[          VAO            ]*******************************/
 
 #include "data.inl"
-vao::vao(const float* data, GLsizeiptr dataSize, GLsizei faces) : faces(faces) {
+vao::vao(const float* data, GLsizeiptr dataSize, GLsizei faces, bool dynamic) : faces(faces), dynamic(dynamic) {
 	glErrors("vao::before");
 
 	glGenVertexArrays(1, &(vao::vaodata));
 	glGenBuffers(1, &(vao::vbodata));
 	glBindVertexArray((vao::vaodata));
 	glBindBuffer(GL_ARRAY_BUFFER, (vao::vbodata));
-	glBufferData(GL_ARRAY_BUFFER, dataSize, data, GL_STATIC_DRAW);
+	glBufferData(GL_ARRAY_BUFFER, dataSize, data, dynamic ? GL_DYNAMIC_DRAW : GL_STATIC_DRAW);
 
 	glEnableVertexAttribArray(0);
 	glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)0);
@@ -187,6 +202,13 @@ vao::vao(const float* data, GLsizeiptr dataSize, GLsizei faces) : faces(faces) {
 	glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)(2 * sizeof(float)));
 
 	glErrors("vao::construct");
+}
+
+void vao::update(const float* data, GLsizeiptr dataSize, GLsizei faces) {
+	glBindBuffer(GL_ARRAY_BUFFER, (vao::vbodata));
+	glBufferData(GL_ARRAY_BUFFER, dataSize, data, dynamic ? GL_DYNAMIC_DRAW : GL_STATIC_DRAW);
+	vao::faces = faces;
+	glErrors("vao::update");
 }
 
 vao::~vao() {
@@ -199,4 +221,138 @@ void vao::draw() {
 	glDrawArrays(GL_TRIANGLES, 0, faces);
 	glBindVertexArray(0);
 	glErrors("vao::draw");
+}
+
+/////////////////////////////////////////////////////////////////////////////////////////
+/*****************************[          sQuad          ]*******************************/
+
+sQuad::sQuad() : vao(sQuad::quadVertices, sizeof(sQuad::quadVertices), 6, true) {
+	sQuad::quadVertices[2] = 0.0f;
+	sQuad::quadVertices[3] = 1.0f;
+	sQuad::quadVertices[6] = 0.0f;
+	sQuad::quadVertices[7] = 0.0f;
+	sQuad::quadVertices[10] = 1.0f;
+	sQuad::quadVertices[11] = 0.0f;
+
+	sQuad::quadVertices[14] = 0.0f;
+	sQuad::quadVertices[15] = 1.0f;
+	sQuad::quadVertices[18] = 1.0f;
+	sQuad::quadVertices[19] = 0.0f;
+	sQuad::quadVertices[22] = 1.0f;
+	sQuad::quadVertices[23] = 1.0f;
+}
+void sQuad::draw(ARect pos, ARect post, bool transTexCoord) {
+	//ARect pos(posi.left * 2 - 1, posi.top * 2 - 1, posi.right * 2 - 1, posi.bottom * 2 - 1);
+	pos = pos * 2 - 1;
+	sQuad::quadVertices[0] = pos.left;
+	sQuad::quadVertices[1] = pos.bottom;
+	sQuad::quadVertices[4] = pos.left;
+	sQuad::quadVertices[5] = pos.top;
+	sQuad::quadVertices[8] = pos.right;
+	sQuad::quadVertices[9] = pos.top;
+
+	sQuad::quadVertices[12] = pos.left;
+	sQuad::quadVertices[13] = pos.bottom;
+	sQuad::quadVertices[16] = pos.right;
+	sQuad::quadVertices[17] = pos.top;
+	sQuad::quadVertices[20] = pos.right;
+	sQuad::quadVertices[21] = pos.bottom;
+
+	if (transTexCoord) {
+		sQuad::quadVertices[2] = post.left;
+		sQuad::quadVertices[3] = post.bottom;
+		sQuad::quadVertices[6] = post.left;
+		sQuad::quadVertices[7] = post.top;
+		sQuad::quadVertices[10] = post.right;
+		sQuad::quadVertices[11] = post.top;
+
+		sQuad::quadVertices[14] = post.left;
+		sQuad::quadVertices[15] = post.bottom;
+		sQuad::quadVertices[18] = post.right;
+		sQuad::quadVertices[19] = post.top;
+		sQuad::quadVertices[22] = post.right;
+		sQuad::quadVertices[23] = post.bottom;
+	}
+	vao::update(sQuad::quadVertices, sizeof(sQuad::quadVertices), 6);
+	vao::draw();
+}
+sQuad::~sQuad() {
+}
+
+/////////////////////////////////////////////////////////////////////////////////////////
+/*****************************[       Sync buffer       ]*******************************/
+
+syncBuffer::syncBuffer(int w, int h, bool useMipmap, GLuint quality, GLuint qualityM) :
+	w(w), h(h), useMipmap(useMipmap), quality(quality) {
+	glGenFramebuffers(1, &framebuffer);
+	glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
+
+	glGenTextures(1, &(syncBuffer::tex));
+	glBindTexture(GL_TEXTURE_2D, syncBuffer::tex);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, syncBuffer::w, syncBuffer::h, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, useMipmap ? GL_LINEAR_MIPMAP_LINEAR : quality);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, qualityM);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, syncBuffer::tex, 0);
+
+	glGenRenderbuffers(1, &(syncBuffer::rbo));
+	glBindRenderbuffer(GL_RENDERBUFFER, syncBuffer::rbo);
+	glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, syncBuffer::w, syncBuffer::h); // use a single renderbuffer object for both a depth AND stencil buffer.
+	glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, syncBuffer::rbo);
+	if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
+		fatalNote("Framebuffer is not complete!");
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+	glErrors("syncBuffer::construct");
+}
+void syncBuffer::scale(int w, int h, bool useMipmap) {
+	syncBuffer::w = w;
+	syncBuffer::h = h;
+
+	glBindFramebuffer(GL_FRAMEBUFFER, syncBuffer::framebuffer);
+
+	glBindTexture(GL_TEXTURE_2D, syncBuffer::tex);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, syncBuffer::w, syncBuffer::h, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
+	if (useMipmap != syncBuffer::useMipmap) {
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, useMipmap ? GL_LINEAR_MIPMAP_LINEAR : syncBuffer::quality);
+		syncBuffer::useMipmap = useMipmap;
+	}
+
+	glBindRenderbuffer(GL_RENDERBUFFER, syncBuffer::rbo);
+	glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, syncBuffer::w, syncBuffer::h);
+	glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, syncBuffer::rbo);
+	if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
+		fatalNote("Framebuffer is not complete!");
+
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+}
+syncBuffer::~syncBuffer() {
+	glDeleteTextures(1, &(syncBuffer::tex));
+	glDeleteRenderbuffers(1, &(syncBuffer::rbo));
+	glDeleteFramebuffers(1, &(syncBuffer::framebuffer));
+	glErrors("syncBuffer::destruct");
+}
+void syncBuffer::writeTo(std::function<void(void)> content) {
+	glBindFramebuffer(GL_FRAMEBUFFER, syncBuffer::framebuffer);
+	glViewport(0, 0, syncBuffer::w, syncBuffer::h);
+	if(content) content();
+	if (syncBuffer::useMipmap) {
+		glBindTexture(GL_TEXTURE_2D, syncBuffer::tex);
+		glGenerateMipmap(GL_TEXTURE_2D);
+	}
+}
+void syncBuffer::readFrom(GLuint textureID) {
+	if (textureID != UINT32_MAX)
+		glActiveTexture(textureID);
+	glBindTexture(GL_TEXTURE_2D, syncBuffer::tex);
+}
+
+/////////////////////////////////////////////////////////////////////////////////////////
+/*****************************[       Async buffer      ]*******************************/
+
+asyncBuffer::asyncBuffer() {
+
+}
+asyncBuffer::~asyncBuffer() {
+
 }
