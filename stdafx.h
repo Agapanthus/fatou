@@ -17,7 +17,7 @@
 #define INITIAL_W 800
 #define INITIAL_H 600
 
-//#define USE_CONSOLE
+#define USE_CONSOLE
 
 #define MAX_VERTEX_BUFFER 512 * 1024
 #define MAX_ELEMENT_BUFFER 128 * 1024
@@ -44,6 +44,10 @@
 #define NK_INCLUDE_DEFAULT_FONT
 #include "nuklear.h"
 #include "nuklear_glfw_gl3.h"
+
+#ifdef OS_WIN
+#include <shellapi.h>
+#endif
 
 /////////////////////////////////////////////////////////////////////////////////////////
 /*****************************[       Entry Point         ]*****************************/

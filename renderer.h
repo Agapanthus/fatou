@@ -30,12 +30,17 @@ public:
 	// if effortQ is <= effort, subcache is used (fast!)
 	void setEffortQ(float effortQ);
 
+	int getIter();
+
 protected:
 	float effort, effortQ;
 	AiSize size;
 //	bool useMargin;
 	ARect position;
 	sQuad quad;
+	bool useSwap;
+
+	pointer<syncBuffer> swapBuffer;
 
 //	int vw, vh;
 };

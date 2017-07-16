@@ -18,6 +18,10 @@
 
 unsigned int MaxFRate = 67;
 
+static const char *densitySelect[] = { "0.25", "1", "4", "9", "16", "36", "100" };
+static const float densityTable[] = { 0.5f, 1.0f, 2.0f, 3.0f, 4.0f, 6.0f, 10.0f };
+
+
 app::app(GLFWwindow *window, nk_context* ctx) :
 	cx(0.00000001f), cy(3.0f),
 	iter(100),
@@ -28,7 +32,11 @@ app::app(GLFWwindow *window, nk_context* ctx) :
 	window(window), ctx(ctx),
 	navigationMode(navigation_lrclick_combi),
 	supers(1.0f), tiles(3,3),
-	targetFRate(30)
+	targetFRate(25),
+	biasPower(-40), show_about(false), isFullscreen(false),
+	show_polynomial(true),
+	trace_length(0), show_roots(false), show_tooltips(true),
+	maxDensity(2), maxDensityI(densityTable[maxDensity])
 {
 
 	glErrors("app::before");
@@ -37,7 +45,7 @@ app::app(GLFWwindow *window, nk_context* ctx) :
 	coet[1] = -1.0f;
 	coet[4] = 20.0f;
 	coet[7] = 100.0f;
-	coet[44] = 20.0f;
+	//coet[44] = 20.0f;
 		
 	app::program.reset(new shader(mainVertexShader, mainFragmentShader));
 	app::uniform.screenTexture = app::program->getUniform("screenTexture");
@@ -69,11 +77,11 @@ app::app(GLFWwindow *window, nk_context* ctx) :
 
 	glfwGetWindowSize(app::window, &(app::width), &(app::height));
 
-	app::optim.reset(new fOptimizer(float(app::targetFRate), 2.0f));
+	app::optim.reset(new fOptimizer(float(app::targetFRate), app::maxDensityI));
 	app::colorMap.reset(new texture("../hue.png"));
 	app::quad.reset(new vao(quadVertices, sizeof(quadVertices), 6));
 	//app::buf1.reset(new syncBuffer(int(app::width*supers), int(app::height*supers), false, GL_LINEAR));
-	app::renderer.reset(new tRenderer(AiSize(app::width, app::height), tiles));
+	app::renderer.reset(new tRenderer(AiSize(app::width, app::height), tiles, app::maxDensityI));
 }
 
 app::~app() {
@@ -104,12 +112,29 @@ void app::reshape(int w, int h) {
 	app::height = h;
 	glViewport(0, 0, app::width, app::height);
 
-	app::renderer->setSize(AiSize(app::width, app::height), tiles);
+	app::renderer->setSize(AiSize(app::width, app::height), app::tiles, app::maxDensityI);
 
 
 //	app::buf1->scale(int(app::width*supers), int(app::height*supers), false);
 
 	glErrors("app::reshape");
+}
+
+void app::setFullscreen(bool fullscreen) {
+	if (app::isFullscreen == fullscreen) return;
+	if (fullscreen) {
+		GLFWmonitor* monitor = glfwGetPrimaryMonitor();
+		const GLFWvidmode* mode = glfwGetVideoMode(monitor);
+		glfwSetWindowMonitor(window, monitor, 0, 0, mode->width, mode->height, mode->refreshRate);
+	}
+	else {
+		GLFWmonitor* monitor = glfwGetPrimaryMonitor();
+		const GLFWvidmode* mode = glfwGetVideoMode(monitor);
+		glfwSetWindowMonitor(app::window, 0, 0, 0, mode->width, mode->height, mode->refreshRate);
+		glfwSetWindowSize(app::window, mode->width / 2, mode->height / 2);
+		glfwSetWindowPos(app::window, mode->width / 4, mode->height / 4);
+	}
+	app::isFullscreen = fullscreen;
 }
 
 void app::logic() {
@@ -122,38 +147,226 @@ void app::logic() {
 
 	///////////////////////////// GUI
 
-	static struct nk_color background = nk_rgb(28, 48, 62);
+	//static struct nk_color background = nk_rgb(28, 48, 62);
 
 	nk_glfw3_new_frame();
 
+	const struct nk_input *in = &ctx->input;
+	struct nk_rect bounds;
+#define TOOLTIP(TEXT) \
+	if(app::show_tooltips) {\
+	bounds = nk_widget_bounds(ctx); \
+		if (nk_input_is_mouse_hovering_rect(in, bounds)) \
+			nk_tooltip(ctx, TEXT); \
+	}
 
-	if (nk_begin(ctx, "Settings", nk_rect(50, 50, 230, 250),
+	if (show_polynomial) {
+		if (nk_begin(ctx, "Fractal", nk_rect(10, 330, 220, 200),
+			NK_WINDOW_BORDER | NK_WINDOW_MOVABLE | NK_WINDOW_SCALABLE |
+			NK_WINDOW_MINIMIZABLE | NK_WINDOW_TITLE)) {
+
+
+			if (nk_tree_push(ctx, NK_TREE_TAB, "Modify", NK_MINIMIZED)) {
+				nk_layout_row_dynamic(ctx, 25, 1);
+				nk_property_int(ctx, "Degree:", 0, &(app::targetFRate), int(MaxFRate * 0.9f), 1000, 0.1f);
+				nk_property_float(ctx, "Value:", 5, &(app::animSpeed), int(MaxFRate * 0.9f), 10, 0.1f);
+				nk_tree_pop(ctx);
+			}
+		}
+		nk_end(ctx);
+	}
+
+	if (nk_begin(ctx, "Fatou", nk_rect(10, 10, 220, 320),
 		NK_WINDOW_BORDER | NK_WINDOW_MOVABLE | NK_WINDOW_SCALABLE |
 		NK_WINDOW_MINIMIZABLE | NK_WINDOW_TITLE))
 	{
-		/*
-		enum { EASY, HARD };
-		static int op = EASY;
-		nk_layout_row_static(ctx, 30, 80, 1);
-		if (nk_button_label(ctx, "button"))
-			fprintf(stdout, "button pressed\n");
 
-		nk_layout_row_dynamic(ctx, 30, 2);
-		if (nk_option_label(ctx, "easy", op == EASY)) op = EASY;
-		if (nk_option_label(ctx, "hard", op == HARD)) op = HARD;
-		*/
+		nk_layout_row_dynamic(ctx, 25, 2);
+		if (nk_button_label(ctx, "About")) {
+			show_about = true;
+		}
+		if (nk_button_label(ctx, "Help")) {
+			app::setFullscreen(false);
+#ifdef OS_WIN
+			ShellExecute(NULL, "open", "help\\index.html", NULL, NULL, SW_SHOW);
+#else
+			#error IMPL
+			// system("helpfile.html"); firefox, xdg-open, /usr/bin/x-www-browser
+#endif
+		}
 
 		nk_layout_row_dynamic(ctx, 25, 1);
-		nk_property_int(ctx, "Target Framerate:", 5, &targetFRate, int(MaxFRate * 0.9f), 10, 1);
-		app::optim->setTargetFramerate(float(targetFRate));
+		if (nk_button_label(ctx, "Exit")) {
+			glfwSetWindowShouldClose(app::window, true);
+		}
 
-		nk_layout_row_dynamic(ctx, 20, 2);
-		nk_label(ctx, "Density:", NK_TEXT_RIGHT);
-		nk_label(ctx, toString(app::optim->getPixelDensity(), 2).c_str(), NK_TEXT_LEFT);
 
-		nk_layout_row_dynamic(ctx, 20, 2);
-		nk_label(ctx, "Framerate:", NK_TEXT_RIGHT);
-		nk_label(ctx, toString(app::optim->getFramerate(), 2).c_str(), NK_TEXT_LEFT);
+		nk_layout_row_dynamic(ctx, 25, 1);
+		if (!isFullscreen) {
+			if (nk_button_label(ctx, "Enter Fullscreen")) {
+				app::setFullscreen(true);
+			}
+		}
+		else {
+			if (nk_button_label(ctx, "Exit Fullscreen")) {
+				app::setFullscreen(false);
+			}
+		}
+
+		if (nk_tree_push(ctx, NK_TREE_TAB, "Renderer", NK_MAXIMIZED)) {
+
+			nk_layout_row_dynamic(ctx, 25, 1);
+			nk_property_int(ctx, "Iterations:", 1, &(app::iter), 1000, 10, app::iter * 0.001f + 0.03f);
+
+			nk_layout_row_dynamic(ctx, 25, 1);
+			TOOLTIP("Magnitudes below 2^bias are assumed to have converged. Too small values cause floating point errors! Use double precision for better quality!");
+			nk_property_int(ctx, "Bias:", -50, &biasPower, 10, 1, 0.1f);
+			app::cx = pow(2.0f, float(biasPower));
+
+			nk_layout_row_dynamic(ctx, 25, 1);
+			nk_property_int(ctx, "Anim. speed:", -50, &biasPower, 10, 1, 0.1f);
+			// TODO: 
+
+			nk_layout_row_begin(ctx, NK_DYNAMIC, 25, 2);
+			nk_layout_row_push(ctx, 0.6f);
+			TOOLTIP("High densities need VERY much RAM! To compensate that, increase the number of tiles.");
+			nk_label(ctx, "Max. Density:", NK_TEXT_RIGHT);
+			nk_layout_row_push(ctx, 0.4f);
+			app::maxDensity = nk_combo(ctx, densitySelect, sizeof(densitySelect)/sizeof(densitySelect[0]), app::maxDensity, 25, nk_vec2(80, 110));
+			nk_layout_row_end(ctx);
+			if (app::maxDensityI != densityTable[app::maxDensity]) {
+				app::maxDensityI = densityTable[app::maxDensity];
+				app::renderer->setSize(AiSize(app::width, app::height), app::tiles, app::maxDensityI);
+				app::optim->setMaxEffort(app::maxDensityI);
+			}
+
+			nk_layout_row_dynamic(ctx, 25, 1);
+			nk_property_int(ctx, "Min. framerate:", 5, &(app::targetFRate), int(MaxFRate * 0.9f), 10, 0.1f);
+			app::optim->setTargetFramerate(float(app::targetFRate));
+
+			nk_layout_row_dynamic(ctx, 20, 2);
+			TOOLTIP("samples per pixel (density > 1.0f leads to antialiasing)");
+			nk_label(ctx, "Density:", NK_TEXT_RIGHT);
+			float dens = app::optim->getPixelDensity();
+			nk_label(ctx, toString(dens*dens, 2).c_str(), NK_TEXT_LEFT);
+
+
+			nk_layout_row_dynamic(ctx, 20, 2);
+			nk_label(ctx, "Framerate:", NK_TEXT_RIGHT);
+			nk_label(ctx, toString(app::optim->getFramerate(), 2).c_str(), NK_TEXT_LEFT);
+
+			nk_layout_row_dynamic(ctx, 20, 1);
+			TOOLTIP("Progressively increases density. This option is ignored while animating!");
+			static int titlebar = true;
+			nk_checkbox_label(ctx, "Progressive renderer", &titlebar);
+			// TODO
+
+			nk_layout_row_dynamic(ctx, 20, 1);
+			TOOLTIP("Enables \"deep zoom\" and improves image quality but is much slower!");
+			static int titlebar2 = true;
+			nk_checkbox_label(ctx, "Double precision", &titlebar2);
+			// TODO
+
+			nk_layout_row_dynamic(ctx, 25, 1);
+			TOOLTIP("High numbers of tiles reduce RAM consumption but are computationally more intense. This option is ignored while progressive rendering is used.");
+			nk_property_int(ctx, "Tiles:", 1, &(app::iter), 1000, 10, app::iter * 0.001f + 0.03f);
+			// TODO
+
+			nk_tree_pop(ctx);
+		}
+
+		if (nk_tree_push(ctx, NK_TREE_TAB, "View", NK_MINIMIZED)) {
+			
+			nk_layout_row_dynamic(ctx, 20, 1);
+			nk_checkbox_label(ctx, "Show About", &show_about);
+			
+			nk_layout_row_dynamic(ctx, 20, 1);
+			nk_checkbox_label(ctx, "Show Tooltips", &show_tooltips); // TODO: Add more Tooltips!
+
+			nk_layout_row_dynamic(ctx, 20, 1);
+			nk_checkbox_label(ctx, "Fractal Settings", &show_polynomial);
+
+			nk_layout_row_dynamic(ctx, 20, 1);
+			nk_checkbox_label(ctx, "Show Roots", &show_roots);
+			// TODO
+
+			nk_layout_row_dynamic(ctx, 25, 1);
+			nk_property_int(ctx, "Trace Iterations:", 0, &(app::trace_length), 1000, 10, 0.1f + 0.03f);
+			// TODO
+
+			// ToDO: Value at
+
+			nk_tree_pop(ctx);
+
+		}
+
+		if (nk_tree_push(ctx, NK_TREE_TAB, "Navigation", NK_MINIMIZED)) {
+
+			nk_layout_row_dynamic(ctx, 25, 1);
+			if (nk_button_label(ctx, "Navigate there")) {
+				glfwSetWindowShouldClose(app::window, true);
+			}		
+
+			nk_tree_pop(ctx);
+
+		}
+
+		if (nk_tree_push(ctx, NK_TREE_TAB, "Colors", NK_MINIMIZED)) {
+
+			// TODO!
+			// Color Modes: Colormap circular, Colormap rectangular, Colormap Linear
+			// Color map!
+			// Increase White with length of radius
+			// Modify Curve for Blackness!
+
+			// Orbit Traps! + Images!
+
+			nk_layout_row_dynamic(ctx, 25, 1);
+			nk_property_float(ctx, "Gradient:", 0.0f, &(app::cy), 10.0f, 1, 0.02f);
+
+			nk_tree_pop(ctx);
+
+		}
+
+
+		
+
+		if (nk_tree_push(ctx, NK_TREE_TAB, "Import / Export", NK_MINIMIZED)) {
+
+			nk_layout_row_dynamic(ctx, 25, 2);
+			nk_property_int(ctx, "Width:", 0, &(app::targetFRate), int(MaxFRate * 0.9f), 1000, 0.1f);
+			nk_property_int(ctx, "Height:", 0, &(app::targetFRate), int(MaxFRate * 0.9f), 1000, 0.1f);
+
+
+			nk_layout_row_dynamic(ctx, 25, 1);
+			if (nk_button_label(ctx, "Save PNG")) {
+				glfwSetWindowShouldClose(app::window, true);
+			}
+			// TODO
+
+			nk_layout_row_dynamic(ctx, 25, 1);
+			if (nk_button_label(ctx, "Save Video")) {
+				glfwSetWindowShouldClose(app::window, true);
+			}
+			// TODO
+
+			nk_layout_row_dynamic(ctx, 25, 1);
+			if (nk_button_label(ctx, "Save Configuration")) {
+				glfwSetWindowShouldClose(app::window, true);
+			}
+			// TODO
+
+			nk_layout_row_dynamic(ctx, 25, 1);
+			if (nk_button_label(ctx, "Load Configuration")) {
+				glfwSetWindowShouldClose(app::window, true);
+			}
+			// TODO
+
+
+			nk_tree_pop(ctx);
+
+		}
+
 
 		/*
 		nk_layout_row_dynamic(ctx, 20, 1);
@@ -172,7 +385,28 @@ void app::logic() {
 	}
 	nk_end(ctx);
 
+	if (show_about) {
+		struct nk_rect s = { app::width / 2 - 150, app::height / 2 - 100, 300, 175 };
+		if (nk_begin(ctx, "About", s,
+			NK_WINDOW_BORDER | NK_WINDOW_MOVABLE | NK_WINDOW_TITLE)) {
+			nk_layout_row_dynamic(ctx, 20, 1);
+			nk_label(ctx, "Fatou 0.1.1", NK_TEXT_CENTERED);
+			nk_label(ctx, "by Eric Skaliks", NK_TEXT_CENTERED);
+			nk_label(ctx, "Fatou is licensed under the MIT License.", NK_TEXT_CENTERED);
+			nk_label(ctx, "See https://github.com/Agapanthus/fatou.", NK_TEXT_CENTERED);
+			nk_layout_row_dynamic(ctx, 25, 1);
+			if (nk_button_label(ctx, "Close")) {
+				show_about = false;
+			}	
+			nk_end(ctx);
+		}
+		else show_about = false;
+	}
+
+
 	if (0 == nk_item_is_any_active(ctx)) {
+
+		setStyle(app::ctx, true);
 
 		///////////////////// Navigate
 
@@ -215,7 +449,10 @@ void app::logic() {
 		}
 
 	}
-	
+	else {
+		setStyle(app::ctx, false);
+	}
+
 
 	///////////////////// Animate Polynomials
 	for (size_t p = 0; p < MAX_POLY; p++) {
@@ -229,6 +466,8 @@ void app::logic() {
 			}
 		}
 	}
+
+//	coe[1] = (sin(clock() / 10000.0f + 3.16*1) ) * 1.5f + 0.5f;
 
 
 }
@@ -287,6 +526,4 @@ void app::display() {
 	nk_glfw3_render(NK_ANTI_ALIASING_ON, MAX_VERTEX_BUFFER, MAX_ELEMENT_BUFFER);
 	glErrors("app::nuklear");
 
-	glfwSwapBuffers(app::window);
-	glErrors("app::swap");
 }

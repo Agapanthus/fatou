@@ -92,6 +92,16 @@ typedef uint32_t uint32;
 typedef uint64_t uint64;
 #endif
 
+inline float maximum(float a, float b) {
+	if (a > b) return a;
+	else return b;
+}
+
+inline float minimum(float a, float b) {
+	if (a < b) return a;
+	else return b;
+}
+
 
 /////////////////////////////////////////////////////////////////////////////////////////
 /*****************************[     Error Handling       ]******************************/
@@ -161,6 +171,19 @@ struct AiSize {
 	}
 	inline bool operator>(const AiSize& compare) const {
 		return ((w > compare.w) && (h > compare.h));
+	}
+
+	inline AiSize operator*(const int fac) const {
+		return AiSize(AiSize::w*fac, AiSize::h*fac);
+	}
+	inline AiSize operator/(const int fac) const {
+		return AiSize(AiSize::w / fac, AiSize::h / fac);
+	}
+	inline AiSize operator+(const int sum) const {
+		return AiSize(AiSize::w + sum, AiSize::h + sum);
+	}
+	inline AiSize operator-(const int sum) const {
+		return AiSize(AiSize::w - sum, AiSize::h - sum);
 	}
 };
 

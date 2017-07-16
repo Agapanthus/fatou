@@ -80,14 +80,17 @@ protected:
 
 class syncBuffer {
 public:
-	syncBuffer(int w, int h, bool useMipmap, GLuint quality = GL_LINEAR, GLuint qualityM = GL_NEAREST);
+	syncBuffer(AiSize iSize, bool useMipmap, GLuint quality = GL_LINEAR, GLuint qualityM = GL_NEAREST);
 	~syncBuffer();
 	void writeTo(std::function<void(void)> content);
-	void scale(int w, int h, bool useMipmap);
+	void scale(AiSize iSize, bool useMipmap);
 	void readFrom(GLuint textureID = UINT32_MAX);
+	void framebufferRead();
+	void framebufferWrite();
+	AiSize getSize();
 protected:
 	GLuint framebuffer, rbo, tex;
-	int w, h;
+	AiSize iSize;
 	bool useMipmap;
 	GLuint quality;
 };

@@ -12,7 +12,7 @@
 
 #include "stdafx.h"
 #include "GLHelpers.h"
-#include "tiledRenderer.h"
+#include "renderer.h"
 
 
 /////////////////////////////////////////////////////////////////////////////////////////
@@ -38,6 +38,7 @@ public:
 	void logic();
 	void render();
 	void display();
+	void setFullscreen(bool fullscreen);
 
 private:
 
@@ -63,6 +64,9 @@ private:
 	int iter;
 	size_t coec;
 	float coe[MAX_POLY], coet[MAX_POLY];
+	int biasPower;
+	int maxDensity;
+	float maxDensityI;
 
 	///////////////////// General 
 
@@ -70,6 +74,8 @@ private:
 	unsigned int lastTime;
 	int width, height;
 	GLint maxTextureSize;
+	bool isFullscreen;
+
 
 	///////////////////// Interaction
 
@@ -84,6 +90,8 @@ private:
 	GLFWwindow* window;
 	struct nk_context *ctx;
 
+	int show_about, show_polynomial, show_roots, show_tooltips;
+	int trace_length;
 
 	///////////////////// Temp / Debug
 

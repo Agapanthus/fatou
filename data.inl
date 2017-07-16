@@ -84,3 +84,51 @@ const float quadVertices[] = {
 	1.0f, -1.0f,  1.0f, 0.0f,
 	1.0f,  1.0f,  1.0f, 1.0f
 };
+
+
+static struct nk_color table[NK_COLOR_COUNT];
+inline void setStyle(nk_context *ctx, bool transparent) {
+	AColor primary(65, 85, 85);
+	AColor hover(28, 163, 80);
+	AColor active(90, 210, 130);
+	unsigned char eleTrans = transparent ? 180 : 255;
+	table[NK_COLOR_TEXT] = nk_rgba(210, 210, 210, 255);
+	table[NK_COLOR_WINDOW] = nk_rgba(57, 67, 71, transparent ? 215 : 255);
+	table[NK_COLOR_HEADER] = nk_rgba(51, 51, 56, 255);
+	table[NK_COLOR_BORDER] = nk_rgba(46, 46, 46, 255);
+	table[NK_COLOR_BUTTON] = nk_rgba(primary.c[AColor::AColor_r], primary.c[AColor::AColor_g], primary.c[AColor::AColor_b], eleTrans);
+	table[NK_COLOR_BUTTON_HOVER] = nk_rgba(hover.c[AColor::AColor_r], hover.c[AColor::AColor_g], hover.c[AColor::AColor_b], 255);
+	table[NK_COLOR_BUTTON_ACTIVE] = nk_rgba(active.c[AColor::AColor_r], active.c[AColor::AColor_g], active.c[AColor::AColor_b], 255);
+	table[NK_COLOR_TOGGLE] = nk_rgba(51, 51, 56, eleTrans);
+	table[NK_COLOR_TOGGLE_HOVER] = nk_rgba(hover.c[AColor::AColor_r], hover.c[AColor::AColor_g], hover.c[AColor::AColor_b], 255);
+	table[NK_COLOR_TOGGLE_CURSOR] = nk_rgba(active.c[AColor::AColor_r], active.c[AColor::AColor_g], active.c[AColor::AColor_b], 255);
+
+	table[NK_COLOR_PROPERTY] = nk_rgba(50, 58, 61, eleTrans);
+	table[NK_COLOR_TRANSP] = nk_rgba(0, 0, 0, 0);
+
+	table[NK_COLOR_SELECT] = nk_rgba(57, 67, 61, 0);
+	table[NK_COLOR_SELECT_ACTIVE] = nk_rgba(48, 83, 111, 255);
+	table[NK_COLOR_SLIDER] = nk_rgba(50, 58, 61, 255);
+	table[NK_COLOR_SLIDER_CURSOR] = nk_rgba(48, 83, 111, 255);
+	table[NK_COLOR_SLIDER_CURSOR_HOVER] = nk_rgba(53, 88, 116, 255);
+	table[NK_COLOR_SLIDER_CURSOR_ACTIVE] = nk_rgba(58, 93, 121, 255);
+	table[NK_COLOR_EDIT] = nk_rgba(50, 58, 61, 255);
+	table[NK_COLOR_EDIT_CURSOR] = nk_rgba(210, 210, 210, 255);
+	table[NK_COLOR_COMBO] = nk_rgba(50, 58, 61, eleTrans);
+	table[NK_COLOR_CHART] = nk_rgba(50, 58, 61, 255);
+	table[NK_COLOR_CHART_COLOR] = nk_rgba(48, 83, 111, 255);
+	table[NK_COLOR_CHART_COLOR_HIGHLIGHT] = nk_rgba(255, 0, 0, 255);
+
+	table[NK_COLOR_SCROLLBAR] = nk_rgba(50, 58, 61, eleTrans );
+
+	table[NK_COLOR_SCROLLBAR_CURSOR] = nk_rgba(primary.c[AColor::AColor_r], primary.c[AColor::AColor_g], primary.c[AColor::AColor_b], eleTrans);
+	table[NK_COLOR_SCROLLBAR_CURSOR_HOVER] = nk_rgba(hover.c[AColor::AColor_r], hover.c[AColor::AColor_g], hover.c[AColor::AColor_b], 255);
+	table[NK_COLOR_SCROLLBAR_CURSOR_ACTIVE] = nk_rgba(active.c[AColor::AColor_r], active.c[AColor::AColor_g], active.c[AColor::AColor_b], 255);
+	table[NK_COLOR_TAB_HEADER] = nk_rgba(57, 167, 71, 255);
+	table[NK_COLOR_TREE_BASE] = table[NK_COLOR_TRANSP];
+	table[NK_COLOR_TREE_HOVER] = nk_rgba(hover.c[AColor::AColor_r], hover.c[AColor::AColor_g], hover.c[AColor::AColor_b], 255);
+	table[NK_COLOR_TREE_TEXT] = nk_rgba(active.c[AColor::AColor_r], active.c[AColor::AColor_g], active.c[AColor::AColor_b], 255);
+	table[NK_COLOR_TREE_BORDER] = nk_rgba(46, 46, 46, 200);
+
+	nk_style_from_table(ctx, table);
+}

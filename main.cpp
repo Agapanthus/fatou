@@ -8,28 +8,6 @@
 *
 */
 
-/*
-TODO:
-
-Fast Noise Sampler
-Navigation
-Parameters!
-View Modes! Iteration-to-intensity-curve, Convergence-to-colormap...
-Generic Animation! Animate Parameters using node-editor and simple scripts!
-Linux Support!
-Compile settings to optimized shader
-Quaternion-Solver?
-Export / Render picture and Video
-Mathematical Features! Detect roots, approximate Julia-Set, Plot Trajectory
-use CMake!
-
-3D: http://hirnsohle.de/test/fractalLab/
-Lighting: http://www.xenodream.com/galleries.htm
-Filters [Xaos] (Sharpening, Bluring, Edge-Detection, Transformation, Projection...)
-http://www.chaospro.de/features.php
-*/
-
-
 
 #include "stdafx.h"
 #include "app.h"
@@ -37,6 +15,7 @@ http://www.chaospro.de/features.php
 
 pointer<app> APP;
 nk_context* ctx;
+static const bool doubleBuffered = false; // Double Buffered GUI at low framerates is a bad idea...
 
 int _main(int argc, char **argv) {
 	try {
@@ -45,6 +24,7 @@ int _main(int argc, char **argv) {
 		glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
 		glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
 		glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+		glfwWindowHint(GLFW_DOUBLEBUFFER, doubleBuffered ? GL_TRUE : GL_FALSE);
 #ifdef __APPLE__
 		glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE); // uncomment this statement to fix compilation on OS X
 #endif
@@ -85,12 +65,16 @@ int _main(int argc, char **argv) {
 			struct nk_font_atlas *atlas;
 			nk_glfw3_font_stash_begin(&atlas);
 			nk_glfw3_font_stash_end();
+
 		}
-		
+
+		//////////////////////////////////////////
+
 		APP.reset(new app(window, ctx));
 
 		glfwSetFramebufferSizeCallback(window, [](GLFWwindow* window, int w, int h) -> void { APP->reshape(w, h); });
 		glErrors("glfw::callbacks");
+
 		
 		///////////////////////////////////
 
@@ -106,6 +90,15 @@ int _main(int argc, char **argv) {
 			APP->logic();
 			APP->render();
 			APP->display();
+
+			if (doubleBuffered) {
+				glfwSwapBuffers(window);
+				glErrors("main::swap");
+			}
+			else {
+				glFinish();
+				glErrors("main::finish");
+			}
 
 			/*unsigned int delta_t = gtimeGet() - lastFrameTime;
 			if (delta_t < (1000 / MaxFRate))

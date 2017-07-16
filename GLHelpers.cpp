@@ -282,14 +282,14 @@ sQuad::~sQuad() {
 /////////////////////////////////////////////////////////////////////////////////////////
 /*****************************[       Sync buffer       ]*******************************/
 
-syncBuffer::syncBuffer(int w, int h, bool useMipmap, GLuint quality, GLuint qualityM) :
-	w(w), h(h), useMipmap(useMipmap), quality(quality) {
+syncBuffer::syncBuffer(AiSize iSize, bool useMipmap, GLuint quality, GLuint qualityM) :
+	iSize(iSize), useMipmap(useMipmap), quality(quality) {
 	glGenFramebuffers(1, &framebuffer);
 	glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
 
 	glGenTextures(1, &(syncBuffer::tex));
 	glBindTexture(GL_TEXTURE_2D, syncBuffer::tex);
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, syncBuffer::w, syncBuffer::h, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, syncBuffer::iSize.w, syncBuffer::iSize.h, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, useMipmap ? GL_LINEAR_MIPMAP_LINEAR : quality);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, qualityM);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
@@ -298,28 +298,27 @@ syncBuffer::syncBuffer(int w, int h, bool useMipmap, GLuint quality, GLuint qual
 
 	glGenRenderbuffers(1, &(syncBuffer::rbo));
 	glBindRenderbuffer(GL_RENDERBUFFER, syncBuffer::rbo);
-	glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, syncBuffer::w, syncBuffer::h); // use a single renderbuffer object for both a depth AND stencil buffer.
+	glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, syncBuffer::iSize.w, syncBuffer::iSize.h); // use a single renderbuffer object for both a depth AND stencil buffer.
 	glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, syncBuffer::rbo);
 	if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
 		fatalNote("Framebuffer is not complete!");
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 	glErrors("syncBuffer::construct");
 }
-void syncBuffer::scale(int w, int h, bool useMipmap) {
-	syncBuffer::w = w;
-	syncBuffer::h = h;
+void syncBuffer::scale(AiSize iSize, bool useMipmap) {
+	syncBuffer::iSize = iSize;
 
 	glBindFramebuffer(GL_FRAMEBUFFER, syncBuffer::framebuffer);
 
 	glBindTexture(GL_TEXTURE_2D, syncBuffer::tex);
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, syncBuffer::w, syncBuffer::h, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, syncBuffer::iSize.w, syncBuffer::iSize.h, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
 	if (useMipmap != syncBuffer::useMipmap) {
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, useMipmap ? GL_LINEAR_MIPMAP_LINEAR : syncBuffer::quality);
 		syncBuffer::useMipmap = useMipmap;
 	}
 
 	glBindRenderbuffer(GL_RENDERBUFFER, syncBuffer::rbo);
-	glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, syncBuffer::w, syncBuffer::h);
+	glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, syncBuffer::iSize.w, syncBuffer::iSize.h);
 	glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, syncBuffer::rbo);
 	if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
 		fatalNote("Framebuffer is not complete!");
@@ -334,7 +333,7 @@ syncBuffer::~syncBuffer() {
 }
 void syncBuffer::writeTo(std::function<void(void)> content) {
 	glBindFramebuffer(GL_FRAMEBUFFER, syncBuffer::framebuffer);
-	glViewport(0, 0, syncBuffer::w, syncBuffer::h);
+	glViewport(0, 0, syncBuffer::iSize.w, syncBuffer::iSize.h);
 	if(content) content();
 	if (syncBuffer::useMipmap) {
 		glBindTexture(GL_TEXTURE_2D, syncBuffer::tex);
@@ -345,6 +344,15 @@ void syncBuffer::readFrom(GLuint textureID) {
 	if (textureID != UINT32_MAX)
 		glActiveTexture(textureID);
 	glBindTexture(GL_TEXTURE_2D, syncBuffer::tex);
+}
+void syncBuffer::framebufferRead() {
+	glBindFramebuffer(GL_READ_FRAMEBUFFER, syncBuffer::framebuffer);
+}
+void syncBuffer::framebufferWrite() {
+	glBindFramebuffer(GL_DRAW_FRAMEBUFFER, syncBuffer::framebuffer);
+}
+AiSize syncBuffer::getSize() {
+	return syncBuffer::iSize;
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////

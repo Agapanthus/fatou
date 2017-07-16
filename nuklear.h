@@ -2163,6 +2163,11 @@ extern "C" {
 		NK_COLOR_SCROLLBAR_CURSOR_HOVER,
 		NK_COLOR_SCROLLBAR_CURSOR_ACTIVE,
 		NK_COLOR_TAB_HEADER,
+		NK_COLOR_TREE_BASE, // EDIT: Eric
+		NK_COLOR_TREE_HOVER,
+		NK_COLOR_TREE_BORDER,
+		NK_COLOR_TREE_TEXT,
+		NK_COLOR_TRANSP,
 		NK_COLOR_COUNT
 	};
 	enum nk_style_cursor {
@@ -3684,6 +3689,7 @@ extern "C" {
 	struct nk_style_tab {
 		/* background */
 		struct nk_style_item background;
+		struct nk_style_item backgroundh; // EDIT: Eric
 		struct nk_color border_color;
 		struct nk_color text;
 
@@ -16925,9 +16931,9 @@ nk_style_from_table(struct nk_context *ctx, const struct nk_color *table)
 	/* property edit */
 	edit = &style->property.edit;
 	nk_zero_struct(*edit);
-	edit->normal = nk_style_item_color(table[NK_COLOR_PROPERTY]);
-	edit->hover = nk_style_item_color(table[NK_COLOR_PROPERTY]);
-	edit->active = nk_style_item_color(table[NK_COLOR_PROPERTY]);
+	edit->normal = nk_style_item_color(table[NK_COLOR_TRANSP]); // EDIT Eric: before: NK_COLOR_PROPERTY
+	edit->hover = nk_style_item_color(table[NK_COLOR_TRANSP]);
+	edit->active = nk_style_item_color(table[NK_COLOR_TRANSP]);
 	edit->border_color = nk_rgba(0, 0, 0, 0);
 	edit->cursor_normal = table[NK_COLOR_TEXT];
 	edit->cursor_hover = table[NK_COLOR_TEXT];
@@ -16996,12 +17002,13 @@ nk_style_from_table(struct nk_context *ctx, const struct nk_color *table)
 
 	/* tab */
 	tab = &style->tab;
-	tab->background = nk_style_item_color(table[NK_COLOR_TAB_HEADER]);
-	tab->border_color = table[NK_COLOR_BORDER];
-	tab->text = table[NK_COLOR_TEXT];
+	tab->background = nk_style_item_color(table[NK_COLOR_TREE_BASE]);
+	tab->backgroundh = nk_style_item_color(table[NK_COLOR_TREE_HOVER]);
+	tab->border_color = table[NK_COLOR_TREE_BORDER];
+	tab->text = table[NK_COLOR_TREE_TEXT];
 	tab->sym_minimize = NK_SYMBOL_TRIANGLE_RIGHT;
 	tab->sym_maximize = NK_SYMBOL_TRIANGLE_DOWN;
-	tab->padding = nk_vec2(4, 4);
+	tab->padding = nk_vec2(4, 10);
 	tab->spacing = nk_vec2(4, 4);
 	tab->indent = 10.0f;
 	tab->border = 1;
@@ -17010,14 +17017,14 @@ nk_style_from_table(struct nk_context *ctx, const struct nk_color *table)
 	/* tab button */
 	button = &style->tab.tab_minimize_button;
 	nk_zero_struct(*button);
-	button->normal = nk_style_item_color(table[NK_COLOR_TAB_HEADER]);
-	button->hover = nk_style_item_color(table[NK_COLOR_TAB_HEADER]);
-	button->active = nk_style_item_color(table[NK_COLOR_TAB_HEADER]);
+	button->normal = nk_style_item_color(table[NK_COLOR_TREE_BASE]); // EDIT: Eric
+	button->hover = nk_style_item_color(table[NK_COLOR_TREE_BASE]);
+	button->active = nk_style_item_color(table[NK_COLOR_TREE_BASE]);
 	button->border_color = nk_rgba(0, 0, 0, 0);
-	button->text_background = table[NK_COLOR_TAB_HEADER];
-	button->text_normal = table[NK_COLOR_TEXT];
-	button->text_hover = table[NK_COLOR_TEXT];
-	button->text_active = table[NK_COLOR_TEXT];
+	button->text_background = table[NK_COLOR_TREE_BASE];
+	button->text_normal = table[NK_COLOR_TREE_TEXT];
+	button->text_hover = table[NK_COLOR_TREE_TEXT];
+	button->text_active = table[NK_COLOR_TREE_TEXT];
 	button->padding = nk_vec2(2.0f, 2.0f);
 	button->touch_padding = nk_vec2(0.0f, 0.0f);
 	button->userdata = nk_handle_ptr(0);
@@ -20088,7 +20095,17 @@ nk_tree_state_base(struct nk_context *ctx, enum nk_tree_type type,
 	nk_layout_row_dynamic(ctx, row_height, 1);
 	nk_layout_reset_min_row_height(ctx);
 
+
 	widget_state = nk_widget(&header, ctx);
+
+	// EDIT: Eric
+	
+	/* update node state */
+	in = (!(layout->flags & NK_WINDOW_ROM)) ? &ctx->input : 0;
+	in = (in && widget_state == NK_WIDGET_VALID) ? &ctx->input : 0;
+	if (nk_button_behavior(&ws, nk_rect(header.x, header.y + 6, header.w, header.h), in, NK_BUTTON_DEFAULT))
+		*state = (*state == NK_MAXIMIZED) ? NK_MINIMIZED : NK_MAXIMIZED;
+
 	if (type == NK_TREE_TAB) {
 		const struct nk_style_item *background = &style->tab.background;
 		if (background->type == NK_STYLE_ITEM_IMAGE) {
@@ -20097,18 +20114,23 @@ nk_tree_state_base(struct nk_context *ctx, enum nk_tree_type type,
 		}
 		else {
 			text.background = background->data.color;
-			nk_fill_rect(out, header, 0, style->tab.border_color);
-			nk_fill_rect(out, nk_shrink_rect(header, style->tab.border),
-				style->tab.rounding, background->data.color);
+			//nk_fill_rect(out, header, 0, style->tab.border_color);
+			// EDIT: Eric
+			if (ws & (NK_WIDGET_STATE_HOVER | NK_WIDGET_STATE_ACTIVE)) {
+				nk_fill_rect(out, nk_shrink_rect(nk_rect(header.x - 5, header.y + 6, header.w + 10, header.h-3), style->tab.border),
+					style->tab.rounding, style->tab.backgroundh.data.color);
+			}
+			else {
+				nk_fill_rect(out, nk_shrink_rect(header, style->tab.border),
+					style->tab.rounding, background->data.color);
+			}
+			nk_fill_rect(out, nk_rect(header.x-5, header.y+6, header.w+10, 1), 0, style->tab.border_color);
+		//	nk_fill_rect(out, nk_rect(header.x, header.y + header.h - 1, header.w, 1), 0, style->tab.border_color);
+
 		}
 	}
 	else text.background = style->window.background;
 
-	/* update node state */
-	in = (!(layout->flags & NK_WINDOW_ROM)) ? &ctx->input : 0;
-	in = (in && widget_state == NK_WIDGET_VALID) ? &ctx->input : 0;
-	if (nk_button_behavior(&ws, header, in, NK_BUTTON_DEFAULT))
-		*state = (*state == NK_MAXIMIZED) ? NK_MINIMIZED : NK_MAXIMIZED;
 
 	/* select correct button style */
 	if (*state == NK_MAXIMIZED) {
@@ -20126,7 +20148,7 @@ nk_tree_state_base(struct nk_context *ctx, enum nk_tree_type type,
 
 	{/* draw triangle button */
 		sym.w = sym.h = style->font->height;
-		sym.y = header.y + style->tab.padding.y;
+		sym.y = header.y + style->tab.padding.y + 6; // EDIT: Eric
 		sym.x = header.x + style->tab.padding.x;
 		nk_do_button_symbol(&ws, &win->buffer, sym, symbol, NK_BUTTON_DEFAULT,
 			button, 0, style->font);
