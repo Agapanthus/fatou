@@ -2,8 +2,7 @@
 /*****************************[           FATOU           ]******************************
 *
 * File: tiledRenderer.h
-* Purpose: Divides Frame into set of tiles. This is necessary for very high resolutions
-* in order to reduce memory consumption and to faster dynamically adapt frame / tile resolutions.
+* Purpose: Class for rendering.
 *
 * Copyright 2017 Eric Skaliks
 *
@@ -14,15 +13,16 @@
 #include "stdafx.h"
 #include "GLHelpers.h"
 
+
 /////////////////////////////////////////////////////////////////////////////////////////
 /*****************************[         rTile           ]*******************************/
 
-class rTile : protected syncBuffer {
+class rTile : protected syncBuffer, public ANoncopyable {
 public:
-	rTile(AiSize size, float effort);
+	rTile(AiSize size, float effort, GLuint magQuality = GL_NEAREST);
 	~rTile();
 
-	void render(std::function<void(ARect tile)> content, AiSize size, ARect position);
+	void render(function<void(ARect tile)> content, AiSize tileSize, ARect position);
 	void draw(GLuint textureID = UINT32_MAX);
 
 	void scale(AiSize size, float effort);
@@ -31,6 +31,11 @@ public:
 	void setEffortQ(float effortQ);
 
 	int getIter();
+	AiSize getSize();
+
+	void bind(GLuint textureID = UINT32_MAX);
+
+	void framebufferWrite();
 
 protected:
 	float effort, effortQ;
@@ -39,6 +44,8 @@ protected:
 	ARect position;
 	sQuad quad;
 	bool useSwap;
+	AiSize tileSize;
+	GLuint magQuality;
 
 	pointer<syncBuffer> swapBuffer;
 
@@ -59,7 +66,7 @@ public:
 /////////////////////////////////////////////////////////////////////////////////////////
 /*****************************[       fOptimizer        ]*******************************/
 
-class fOptimizer : public QPC {
+class fOptimizer : public QPC, public ANoncopyable {
 public:
 	fOptimizer(float targetFrameRate, float maxEffort = 2.0f);
 	void hint(float factor);  // factor should be an estimate for the change in rendering time due to parameter change (eg, factor=2.0f if rendering is expected to take twice as long)
@@ -83,7 +90,9 @@ private:
 /////////////////////////////////////////////////////////////////////////////////////////
 /*****************************[        tRenderer        ]*******************************/
 
-class tRenderer : public sRenderer {
+// Divides Frame into set of tiles. This is necessary for very high resolutions
+// in order to reduce memory consumption.
+class tRenderer : public sRenderer, public ANoncopyable {
 public:
 	tRenderer(AiSize size, AiSize tiles, float maxEffort = 2.0f);
 	~tRenderer();
@@ -91,7 +100,7 @@ public:
 	void setSize(AiSize size, AiSize tiles, float maxEffort = 2.0f);
 	
 	// Returns true, if there are tiles left
-	bool renderTile(std::function<void(ARect tile)> content);
+	bool renderTile(function<void(ARect tile)> content);
 	void drawTile(GLuint textureID = UINT32_MAX);
 
 	void setEffort(float effort);
@@ -104,3 +113,4 @@ protected:
 	ARect tileArea;
 	int tilec;
 };
+

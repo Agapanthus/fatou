@@ -89,17 +89,8 @@ public:
 	void framebufferWrite();
 	AiSize getSize();
 protected:
-	GLuint framebuffer, rbo, tex;
+	GLuint framebuffer,/* rbo, */ tex;
 	AiSize iSize;
 	bool useMipmap;
 	GLuint quality;
-};
-
-/////////////////////////////////////////////////////////////////////////////////////////
-/*****************************[       Async buffer      ]*******************************/
-
-class asyncBuffer {
-public:
-	asyncBuffer();
-	~asyncBuffer();
 };

@@ -111,10 +111,18 @@ using std::exception;
 
 typedef std::bad_alloc AAllocException;
 
+#ifdef USE_ASSERTATIONS
+#include <assert.h>
+#define fassert(expr) assert(expr)
+#else
+#define fassert(expr)
+#endif
+
+
 #define ALLOC_CHECK(MEMORY) if(MEMORY == nullptr) throw AAllocException();
 
 #ifdef OS_WIN
-inline int32 fatalNote(std::string msg) {
+inline int32 _fatalNote(std::string msg) {
 	switch (MessageBoxA(nullptr, (std::string("Fatal Error: ") + msg).c_str(), "Fatou::Error",  MB_ICONERROR | MB_SYSTEMMODAL)) {
 	case IDIGNORE:
 		return 0;
@@ -129,7 +137,7 @@ inline int32 fatalNote(std::string msg) {
 
 #include <unistd.h>
 
-inline int32 fatalNote(std::string msg) {
+inline int32 _fatalNote(std::string msg) {
 	std::cout << msg << std::endl;
 
 	pid_t my_pid;
@@ -147,10 +155,8 @@ inline int32 fatalNote(std::string msg) {
 #error IMPL
 #endif
 
-inline int32 fatalNote(bool condition, std::string msg) {
-	if (condition) return fatalNote(msg);
-	return 0;
-}
+#define fatalNote(TEXT) _fatalNote(StreamFormatter() << TEXT)
+
 
 /////////////////////////////////////////////////////////////////////////////////////////
 /*****************************[        Geometry          ]******************************/
@@ -245,26 +251,6 @@ struct AiRect {
 	}
 };
 
-// DST is the smallest rect containing both A and B.
-// If A's or B's height or width is zero, this dimension is ignored.
-#define ARect_OR(DST, A, B)\
-	if((A.left < A.right) && (B.left < B.right)) { DST.left = A.left < B.left ? A.left : B.left; DST.right = A.right > B.right ? A.right : B.right; }\
-	else if(A.left < A.right) { DST.left = A.left; DST.right = A.right; }\
-	else if(B.left < B.right) { DST.left = B.left; DST.right = B.right; }\
-	else { DST.left = 0; DST.right = 0; }\
-	if((A.top < A.bottom) && (B.top < B.bottom)) { DST.top = A.top < B.top ? A.top : B.top; DST.bottom = A.bottom > B.bottom ? A.bottom : B.bottom; }\
-	else if(A.top < A.bottom) { DST.top = A.top; DST.bottom = A.bottom; }\
-	else if(B.top < B.bottom) { DST.top = B.top; DST.bottom = B.bottom; }\
-	else { DST.top = 0; DST.bottom = 0; }
-//  DST is the smallest rect containing both A and B.
-#define ARect_ORQ(DST, A, B) DST.left = A.left < B.left ? A.left : B.left; DST.right = A.right > B.right ? A.right : B.right; DST.top = A.top < B.top ? A.top : B.top; DST.bottom = A.bottom > B.bottom ? A.bottom : B.bottom;
-// DST is the intersection of A and B
-#define ARect_AND(DST, A, B) DST.left = A.left > B.left ? A.left : B.left; DST.right = A.right < B.right ? A.right : B.right; DST.top = A.top > B.top ? A.top : B.top; DST.bottom = A.bottom < B.bottom ? A.bottom : B.bottom;
-// Evaluates to true, if A and B intersect
-#define ARect_Overlap(A, B) (((A.left < B.right) && (A.right > B.left) && (A.top < B.bottom) && (A.bottom > B.top )))
-
-// Evaluates to true, if (a, b) is inside the rect r
-#define AB_INSIDE_AR(a, b, r) (((a)<(r).right) && ((a)>=(r).left) && ((b)<(r).bottom) && ((b)>=(r).top))
 
 
 /////////////////////////////////////////////////////////////////////////////////////////
@@ -338,12 +324,12 @@ public:
 	}
 	// return designated value
 	T& operator*() {
-		fatalNote(pointer::c == nullptr, "designating nullptr");
+		if(pointer::c == nullptr) fatalNote("designating nullptr");
 		return (*(pointer::c));
 	}
 	// return pointer to class object
 	T *operator->() {
-		fatalNote(pointer::c == nullptr, "addressing nullptr");
+		if(pointer::c == nullptr) fatalNote("addressing nullptr");
 		return (pointer::c);
 	}
 	const T *data() const {
@@ -451,6 +437,22 @@ inline string16 toString16(ARect rect) {
 inline string16 toString16(string in) {
 	return toUTF16(in);
 }
+
+
+
+class StreamFormatter {
+public:
+	operator std::string() const {
+		return stream.str();
+	}
+	template<typename T> StreamFormatter& operator << (const T& value) {
+		stream << value;
+		return *this;
+	}
+private:
+	std::ostringstream stream;
+};
+
 
 /////////////////////////////////////////////////////////////////////////////////////////
 /*****************************[         picopng          ]******************************/
@@ -592,15 +594,8 @@ public:
 		QPC::CounterStart = li.QuadPart;
 		return dif;
 	}
-	// Sleeps for at least millis ms and substracts this intervall from timer values
 	void sleep(int millis) {
-		/*LARGE_INTEGER li;
-		QueryPerformanceCounter(&li);*/
 		Sleep(millis);
-		/*LARGE_INTEGER li2;
-		QueryPerformanceCounter(&li2);
-		QPC::CounterStart += (li2.QuadPart - li.QuadPart);
-		return double(li2.QuadPart - li.QuadPart) / QPC::PCFreq;*/
 	}
 	~QPC() {
 

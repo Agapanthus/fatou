@@ -21,8 +21,11 @@ void glErrors(const char* wheres) {
 	}
 }
 #ifdef OS_WIN
-unsigned int gtimeGet() {
-	return clock();
+uint32 gtimeGet() {
+	//return clock();
+	GLint64 timer;
+	glGetInteger64v(GL_TIMESTAMP, &timer);
+	return uint32( timer / 1000000 );
 }
 #else
 #error IMPL
@@ -186,7 +189,6 @@ void texture::use(GLuint textureID) {
 /////////////////////////////////////////////////////////////////////////////////////////
 /*****************************[          VAO            ]*******************************/
 
-#include "data.inl"
 vao::vao(const float* data, GLsizeiptr dataSize, GLsizei faces, bool dynamic) : faces(faces), dynamic(dynamic) {
 	glErrors("vao::before");
 
@@ -296,10 +298,10 @@ syncBuffer::syncBuffer(AiSize iSize, bool useMipmap, GLuint quality, GLuint qual
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, syncBuffer::tex, 0);
 
-	glGenRenderbuffers(1, &(syncBuffer::rbo));
-	glBindRenderbuffer(GL_RENDERBUFFER, syncBuffer::rbo);
-	glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, syncBuffer::iSize.w, syncBuffer::iSize.h); // use a single renderbuffer object for both a depth AND stencil buffer.
-	glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, syncBuffer::rbo);
+	//glGenRenderbuffers(1, &(syncBuffer::rbo));
+	//glBindRenderbuffer(GL_RENDERBUFFER, syncBuffer::rbo);
+	//glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, syncBuffer::iSize.w, syncBuffer::iSize.h); // use a single renderbuffer object for both a depth AND stencil buffer.
+	//glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, syncBuffer::rbo);
 	if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
 		fatalNote("Framebuffer is not complete!");
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
@@ -317,9 +319,9 @@ void syncBuffer::scale(AiSize iSize, bool useMipmap) {
 		syncBuffer::useMipmap = useMipmap;
 	}
 
-	glBindRenderbuffer(GL_RENDERBUFFER, syncBuffer::rbo);
-	glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, syncBuffer::iSize.w, syncBuffer::iSize.h);
-	glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, syncBuffer::rbo);
+	//glBindRenderbuffer(GL_RENDERBUFFER, syncBuffer::rbo);
+	//glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, syncBuffer::iSize.w, syncBuffer::iSize.h);
+	//glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, syncBuffer::rbo);
 	if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
 		fatalNote("Framebuffer is not complete!");
 
@@ -327,7 +329,7 @@ void syncBuffer::scale(AiSize iSize, bool useMipmap) {
 }
 syncBuffer::~syncBuffer() {
 	glDeleteTextures(1, &(syncBuffer::tex));
-	glDeleteRenderbuffers(1, &(syncBuffer::rbo));
+//	glDeleteRenderbuffers(1, &(syncBuffer::rbo));
 	glDeleteFramebuffers(1, &(syncBuffer::framebuffer));
 	glErrors("syncBuffer::destruct");
 }
@@ -353,14 +355,4 @@ void syncBuffer::framebufferWrite() {
 }
 AiSize syncBuffer::getSize() {
 	return syncBuffer::iSize;
-}
-
-/////////////////////////////////////////////////////////////////////////////////////////
-/*****************************[       Async buffer      ]*******************************/
-
-asyncBuffer::asyncBuffer() {
-
-}
-asyncBuffer::~asyncBuffer() {
-
 }

@@ -15,7 +15,7 @@
 
 pointer<app> APP;
 nk_context* ctx;
-static const bool doubleBuffered = false; // Double Buffered GUI at low framerates is a bad idea...
+static const bool doubleBuffered = false; // Double Buffered GUI at low framerates is a bad idea... // TODO: Can I make it dynamic? Swap buffer twice if frame rate is low?
 
 int _main(int argc, char **argv) {
 	try {
@@ -49,14 +49,6 @@ int _main(int argc, char **argv) {
 		}
 		glErrors("glfw::init");
 
-		//////////////////////////////////
-
-		GLint texture_units = 0;
-		glGetIntegerv(GL_MAX_TEXTURE_IMAGE_UNITS, &texture_units);
-		glErrors("main::getMaxTextureImageUnits");
-		if (texture_units < 16) {
-			fatalNote("GPU doesn't support 16 textures per fragment shader");
-		}
 
 		///////////////////////////////////
 

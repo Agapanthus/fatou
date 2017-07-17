@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////////////////////
 /*****************************[           FATOU           ]******************************
 *
-* File: tiledRenderer.cpp
-* Purpose: Divides Frame into set of tiles.
+* File: renderer.cpp
+* Purpose: classes for Rendering.
 *
 * Copyright 2017 Eric Skaliks
 *
@@ -14,14 +14,21 @@
 /////////////////////////////////////////////////////////////////////////////////////////
 /*****************************[         rTile           ]*******************************/
 
-rTile::rTile(AiSize size, float effort) :
-	// Mipmaps are deactivated (caused artifacts). Instead, use a serious of linear copies! 
-	syncBuffer(AiSize( int(ceil(float(size.w)*effort)), int(ceil(float(size.h)*effort))), /*effort > 2.f*/ false, GL_LINEAR, GL_NEAREST),
-	size(size), effortQ(effort), effort(effort), position(0.0f,0.0f,0.0f,0.0f) {
+
+void rTile::framebufferWrite() {
+	// TODO: Remove this function!
+	syncBuffer::framebufferWrite();
+}
+
+
+rTile::rTile(AiSize size, float effort, GLuint magQuality) :
+	// Mipmaps are deactivated (caused artifacts). Instead, use series of linear copies! 
+	syncBuffer(AiSize( int(ceil(float(size.w)*effort)), int(ceil(float(size.h)*effort))), /*effort > 2.f*/ false, GL_LINEAR, magQuality), 
+	magQuality(magQuality),	size(size), effortQ(effort), effort(effort), position(0.0f,0.0f,0.0f,0.0f) {
 
 	if (rTile::effort > 2.0f) {
 		int iterations = rTile::getIter();
-		swapBuffer.reset(new syncBuffer(rTile::size * (1 << iterations), false, GL_LINEAR, GL_NEAREST));
+		swapBuffer.reset(new syncBuffer(rTile::size * (1 << iterations), false, GL_LINEAR, magQuality));
 	}
 }
 
@@ -29,10 +36,14 @@ rTile::~rTile() {
 
 }
 
-void rTile::render(std::function<void(ARect tile)> content, AiSize sizeI, ARect position) {
-	// TODO: assert size and position and effortQ > 0
-	int vw = (rTile::effortQ < rTile::effort) ? int(ceil(rTile::effortQ*float(sizeI.w))) : int(ceil(float(sizeI.w)*rTile::effort));
-	int vh = (rTile::effortQ < rTile::effort) ? int(ceil(rTile::effortQ*float(sizeI.h))) : int(ceil(float(sizeI.h)*rTile::effort));
+void rTile::render(std::function<void(ARect tile)> content, AiSize tileSize, ARect position) {
+	fassert(rTile::effortQ > 0);
+	fassert(tileSize.w <= rTile::size.w);
+	fassert(tileSize.h <= rTile::size.h);
+
+	int vw = (rTile::effortQ < rTile::effort) ? int(ceil(rTile::effortQ*float(tileSize.w))) : int(ceil(float(tileSize.w)*rTile::effort));
+	int vh = (rTile::effortQ < rTile::effort) ? int(ceil(rTile::effortQ*float(tileSize.h))) : int(ceil(float(tileSize.h)*rTile::effort));
+	rTile::tileSize = tileSize;
 
 	rTile::position = position;
 	glBindFramebuffer(GL_FRAMEBUFFER, syncBuffer::framebuffer);
@@ -92,6 +103,10 @@ int rTile::getIter() {
 	return iterations;
 }
 
+AiSize rTile::getSize() {
+	return syncBuffer::getSize();
+}
+
 void rTile::scale(AiSize size, float effort) {
 	rTile::size = size;
 	syncBuffer::scale(AiSize(int(ceil(size.w*effort)), int(ceil(size.h*effort))), false /* effort > 2.f*/);
@@ -103,36 +118,48 @@ void rTile::scale(AiSize size, float effort) {
 		if(swapBuffer.data())
 			swapBuffer->scale(rTile::size * (1 << iterations), false);
 		else 
-			swapBuffer.reset(new syncBuffer(rTile::size * (1 << iterations), false, GL_LINEAR, GL_NEAREST));
+			swapBuffer.reset(new syncBuffer(rTile::size * (1 << iterations), false, GL_LINEAR, rTile::magQuality));
 	}
 	else {
 		swapBuffer.reset(0, false);
 	}
 }
 
+void rTile::bind(GLuint textureID) {
+	if (rTile::useSwap) {
+		rTile::swapBuffer->readFrom(textureID);
+	}
+	else {
+		syncBuffer::readFrom(textureID);
+	}
+}
 void rTile::draw(GLuint textureID) {
-	// TODO: When density < 1.0f there are sometimes still blue / magenta vertical / horizontal lines in some Frames! Obviously, sometimes there are still too many pixels drawn / used for interpolation! (Possibly fixed. Don't know.)
+	fassert(position.right - position.left > 0);
+	fassert(position.bottom - position.top > 0);
 
+	// TODO: When density < 1.0f there are sometimes still blue / magenta vertical / horizontal lines in some Frames! Obviously, sometimes there are still too many pixels drawn / used for interpolation! (Not fixed!)
 
-	// TODO: Rand wird nicht korrekt beruecksichtigt! Die Letzten Tiles mit angepasster Größe werden falsch angezeigt!
+	rTile::bind(textureID);
 
 	// if effort>2.0f data is already scaled to 2.0f using Blit
 	float mul = (minimum(rTile::effortQ, 2.0f) / rTile::effort);
 	if (rTile::useSwap) {
-		rTile::swapBuffer->readFrom(textureID);
-		rTile::quad.draw(rTile::position, (ARect(0.0f, 0.0f, 
-			syncBuffer::iSize.w / float(rTile::swapBuffer->getSize().w), 
-			syncBuffer::iSize.h / float(rTile::swapBuffer->getSize().h))) * mul, true);
+		rTile::quad.draw(rTile::position, ARect(0.0f, 0.0f, 
+			(syncBuffer::iSize.w / float(rTile::swapBuffer->getSize().w)  ),
+			(syncBuffer::iSize.h / float(rTile::swapBuffer->getSize().h))) * mul, true);
 	}
 	else {
-		syncBuffer::readFrom(textureID);
-		// if effort>2.0f data is already scaled to 2.0f using Blit
-		rTile::quad.draw(rTile::position, (ARect(0.0f, 0.0f, 1.0f, 1.0f)) * mul, true);
+		if (rTile::getIter() <= 0) {
+			// Needs to correct Size by tileSize/size if one of the tiles is a little bit smaller
+			rTile::quad.draw(rTile::position, ARect(0.0f, 0.0f,
+				rTile::tileSize.w / float(rTile::size.w),
+				rTile::tileSize.h / float(rTile::size.h)) * mul, true);
+		}
+		else {
+			// No tilesize-Correction necessary! Texture is already scaled to optimal size!
+			rTile::quad.draw(rTile::position, ARect(0.0f, 0.0f,1.0f, 1.0f) * mul, true);
+		}
 	}
-
-	//cout << position.left << " " << position.top << " " << position.right << " " << position.bottom << endl;
-	//rTile::quad.draw(rTile::position, (ARect(0.0f,0.0f,1.0f,1.0f)) * ((rTile::effortQ < rTile::effort) ? (effortQ / effort) : 1.0f), true);
-
 }
 
 
@@ -217,6 +244,7 @@ float fOptimizer::getFramerate() const {
 	return float(1000.0 / fOptimizer::floatingTime);
 }
 
+
 /////////////////////////////////////////////////////////////////////////////////////////
 /*****************************[        tRenderer        ]*******************************/
 
@@ -224,11 +252,9 @@ tRenderer::tRenderer(AiSize size, AiSize tiles, float maxEffort) :
 	effort(0.1f), tilec(0), tileArea(0.0f,0.0f,0.0f,0.0f) {
 	tRenderer::setSize(size, tiles, maxEffort);
 }
-
 tRenderer::~tRenderer() {
 
 }
-
 void tRenderer::setSize(AiSize size, AiSize tiles, float maxEffort) {
 	tRenderer::maxEffort = maxEffort;
 	tRenderer::tiles = tiles;
@@ -236,7 +262,6 @@ void tRenderer::setSize(AiSize size, AiSize tiles, float maxEffort) {
 	tRenderer::tile.reset(new rTile(AiSize( int(ceil(size.w / float(tiles.w))), int(ceil(size.h / float(tiles.h)))), tRenderer::maxEffort));
 	tRenderer::tile->setEffortQ(tRenderer::effort);
 }
-
 bool tRenderer::renderTile(std::function<void(ARect tile)> content) {
 	
 	if (tRenderer::tilec >= tRenderer::tiles.w*tRenderer::tiles.h) {
@@ -265,8 +290,6 @@ bool tRenderer::renderTile(std::function<void(ARect tile)> content) {
 	tRenderer::tilec++;
 	return true;
 }
-
-
 void tRenderer::setEffort(float effort) {
 	tRenderer::effort = effort;
 	tRenderer::tile->setEffortQ(effort);
@@ -274,7 +297,6 @@ void tRenderer::setEffort(float effort) {
 float tRenderer::getEffort() const {
 	return tRenderer::effort;
 }
-
 void tRenderer::drawTile(GLuint textureID) {
 	tRenderer::tile->draw(textureID);
 }

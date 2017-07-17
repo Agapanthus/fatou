@@ -1,16 +1,19 @@
 /////////////////////////////////////////////////////////////////////////////////////////
-/*****************************[           FATOU         ]********************************
+/*****************************[           FATOU           ]******************************
 *
-* File: data.inl
-* Purpose: Shaders and Data.
+* File: data.cpp
+* Purpose: Shared constant data structures.
 *
 * Copyright 2017 Eric Skaliks
 *
 */
 
-#pragma once
 #include "stdafx.h"
+#include "data.h"
 
+
+/////////////////////////////////////////////////////////////////////////////////////////
+/*****************************[          data           ]*******************************/
 
 const string viewtexture(
 	"uniform sampler2D screenTexture;"
@@ -73,6 +76,7 @@ const string mainVertexShader(
 	"	gl_Position = vec4(aPos.x, aPos.y, 0.0, 1.0);"
 	"}");
 
+/*
 // vertex attributes for a quad that fills the entire screen in Normalized Device Coordinates.
 const float quadVertices[] = {
 	// positions   // texCoords
@@ -83,11 +87,11 @@ const float quadVertices[] = {
 	-1.0f,  1.0f,  0.0f, 1.0f,
 	1.0f, -1.0f,  1.0f, 0.0f,
 	1.0f,  1.0f,  1.0f, 1.0f
-};
+};*/
 
 
 static struct nk_color table[NK_COLOR_COUNT];
-inline void setStyle(nk_context *ctx, bool transparent) {
+void setStyle(nk_context *ctx, bool transparent) {
 	AColor primary(65, 85, 85);
 	AColor hover(28, 163, 80);
 	AColor active(90, 210, 130);

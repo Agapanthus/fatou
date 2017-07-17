@@ -18,6 +18,7 @@
 #define INITIAL_H 600
 
 #define USE_CONSOLE
+#define USE_ASSERTATIONS
 
 #define MAX_VERTEX_BUFFER 512 * 1024
 #define MAX_ELEMENT_BUFFER 128 * 1024
@@ -28,6 +29,13 @@
 #include "abstraction.h"
 #include <time.h>
 #include <functional>
+using std::function;
+#include <thread>
+using std::thread;
+
+#include <queue>
+#include <mutex>
+#include <condition_variable>
 
 // OpenGL
 #define GLEW_STATIC

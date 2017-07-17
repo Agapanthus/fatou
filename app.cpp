@@ -10,7 +10,6 @@
 
 #include "stdafx.h"
 #include "app.h"
-#include "data.inl"
 
 
 /////////////////////////////////////////////////////////////////////////////////////////
@@ -25,7 +24,7 @@ static const float densityTable[] = { 0.5f, 1.0f, 2.0f, 3.0f, 4.0f, 6.0f, 10.0f 
 app::app(GLFWwindow *window, nk_context* ctx) :
 	cx(0.00000001f), cy(3.0f),
 	iter(100),
-	zoomx(3.0f), zoomy(2.0f), zoom(2.0f),
+	zoomx(1.0f), zoomy(1.0f), zoom(2.0f),
 	posx(0.0f), posy(0.0f),
 	animSpeed(1000.0f),
 	lastTime(UINT32_MAX),
@@ -58,9 +57,6 @@ app::app(GLFWwindow *window, nk_context* ctx) :
 	app::program->use();
 	glUniform1i(app::uniform.screenTexture, 0);
 
-	app::texprogram.reset(new shader(mainVertexShader, viewtexture));
-	app::texprogram->use();
-	glUniform1i(app::texprogram->getUniform("screenTexture"), 0);
 	
 	
 	///////////////////////////////////////////////////
@@ -77,15 +73,35 @@ app::app(GLFWwindow *window, nk_context* ctx) :
 
 	glfwGetWindowSize(app::window, &(app::width), &(app::height));
 
-	app::optim.reset(new fOptimizer(float(app::targetFRate), app::maxDensityI));
+	//app::optim.reset(new fOptimizer(float(app::targetFRate), app::maxDensityI));
 	app::colorMap.reset(new texture("../hue.png"));
-	app::quad.reset(new vao(quadVertices, sizeof(quadVertices), 6));
-	//app::buf1.reset(new syncBuffer(int(app::width*supers), int(app::height*supers), false, GL_LINEAR));
-	app::renderer.reset(new tRenderer(AiSize(app::width, app::height), tiles, app::maxDensityI));
+	//app::renderer.reset(new tRenderer(AiSize(app::width, app::height), tiles, app::maxDensityI));
+	//app::progrenderer.reset(new pRenderer(AiSize(app::width, app::height), 1000.0f / app::targetFRate, app::maxDensityI));
+	//app::octx.reset(new offscreenctx<worker, workerMsg>(new worker()));
+
+	app::renderF = [this](void) -> void {
+		glClear(GL_COLOR_BUFFER_BIT);
+		glClearColor(0.0f, 0.0f, 1.0f, 1.0f);
+
+		app::program->use();
+
+		glUniform2f(app::uniform.c, cx, cy);
+		glUniform2f(app::uniform.zoom, zoomx, zoomy);
+		glUniform2f(app::uniform.pos, posx, posy);
+		glUniform1i(app::uniform.iter, iter);
+		glUniform1fv(app::uniform.coe, MAX_POLY, coe);
+		glUniform1i(app::uniform.coec, coec);
+		glErrors("app::uniform");
+
+		app::colorMap->use(GL_TEXTURE0);
+	};
+
+
+	app::renderer.reset(new aRenderer(AiSize(app::width, app::height), tiles, app::maxDensityI, float(app::targetFRate), renderF));
+	
 }
 
 app::~app() {
-
 };
 
 void app::keypressed(int key) {
@@ -106,16 +122,18 @@ void app::keypressed(int key) {
 
 void app::reshape(int w, int h) {
 
-	app::optim->hint( float(w*h) / (app::width*app::height));
+	//app::optim->hint( float(w*h) / (app::width*app::height));
 
 	app::width = w;
 	app::height = h;
 	glViewport(0, 0, app::width, app::height);
 
-	app::renderer->setSize(AiSize(app::width, app::height), app::tiles, app::maxDensityI);
+	app::renderer->setSize(AiSize(app::width, app::height));
+	//app::renderer->setSize(AiSize(app::width, app::height), app::tiles, app::maxDensityI);
+	//app::w->push(sizeChangeMessage(AiSize(app::width, app::height)));
 
+	//app::progrenderer->setSize(AiSize(app::width, app::height), 1000.0f / app::targetFRate, app::maxDensityI);
 
-//	app::buf1->scale(int(app::width*supers), int(app::height*supers), false);
 
 	glErrors("app::reshape");
 }
@@ -151,12 +169,14 @@ void app::logic() {
 
 	nk_glfw3_new_frame();
 
+	
 	const struct nk_input *in = &ctx->input;
 	struct nk_rect bounds;
 #define TOOLTIP(TEXT) \
 	if(app::show_tooltips) {\
-	bounds = nk_widget_bounds(ctx); \
-		if (nk_input_is_mouse_hovering_rect(in, bounds)) \
+		bounds = nk_widget_bounds(ctx); \
+		if (nk_input_is_mouse_hovering_rect(in, bounds) \
+			&& nk_window_is_hovered(ctx) /*otherwise tooltips will even appear when the hovered element is invisible */) \
 			nk_tooltip(ctx, TEXT); \
 	}
 
@@ -169,7 +189,7 @@ void app::logic() {
 			if (nk_tree_push(ctx, NK_TREE_TAB, "Modify", NK_MINIMIZED)) {
 				nk_layout_row_dynamic(ctx, 25, 1);
 				nk_property_int(ctx, "Degree:", 0, &(app::targetFRate), int(MaxFRate * 0.9f), 1000, 0.1f);
-				nk_property_float(ctx, "Value:", 5, &(app::animSpeed), int(MaxFRate * 0.9f), 10, 0.1f);
+				nk_property_float(ctx, "Value:", 5, &(app::animSpeed), (MaxFRate * 0.9f), 10, 0.1f);
 				nk_tree_pop(ctx);
 			}
 		}
@@ -236,27 +256,29 @@ void app::logic() {
 			nk_layout_row_end(ctx);
 			if (app::maxDensityI != densityTable[app::maxDensity]) {
 				app::maxDensityI = densityTable[app::maxDensity];
-				app::renderer->setSize(AiSize(app::width, app::height), app::tiles, app::maxDensityI);
-				app::optim->setMaxEffort(app::maxDensityI);
+				//app::renderer->setSize(AiSize(app::width, app::height), app::tiles, app::maxDensityI);
+				//app::optim->setMaxEffort(app::maxDensityI);
+				app::renderer->setMaxEffort(app::maxDensityI);
 			}
 
 			nk_layout_row_dynamic(ctx, 25, 1);
 			nk_property_int(ctx, "Min. framerate:", 5, &(app::targetFRate), int(MaxFRate * 0.9f), 10, 0.1f);
-			app::optim->setTargetFramerate(float(app::targetFRate));
+			//app::optim->setTargetFramerate(float(app::targetFRate));
+			app::renderer->setTargetFramerate(float(app::targetFRate));
 
 			nk_layout_row_dynamic(ctx, 20, 2);
-			TOOLTIP("samples per pixel (density > 1.0f leads to antialiasing)");
+			TOOLTIP("samples per pixel (density > 1.0 leads to antialiasing)");
 			nk_label(ctx, "Density:", NK_TEXT_RIGHT);
-			float dens = app::optim->getPixelDensity();
+			float dens = app::renderer->getPixelDensity();
 			nk_label(ctx, toString(dens*dens, 2).c_str(), NK_TEXT_LEFT);
 
 
 			nk_layout_row_dynamic(ctx, 20, 2);
 			nk_label(ctx, "Framerate:", NK_TEXT_RIGHT);
-			nk_label(ctx, toString(app::optim->getFramerate(), 2).c_str(), NK_TEXT_LEFT);
+			nk_label(ctx, toString(app::renderer->getFramerate(), 2).c_str(), NK_TEXT_LEFT);
 
 			nk_layout_row_dynamic(ctx, 20, 1);
-			TOOLTIP("Progressively increases density. This option is ignored while animating!");
+			TOOLTIP("Progressively increases density. This option is ignored while running animations!");
 			static int titlebar = true;
 			nk_checkbox_label(ctx, "Progressive renderer", &titlebar);
 			// TODO
@@ -386,7 +408,7 @@ void app::logic() {
 	nk_end(ctx);
 
 	if (show_about) {
-		struct nk_rect s = { app::width / 2 - 150, app::height / 2 - 100, 300, 175 };
+		struct nk_rect s = { app::width / 2.0f - 150, app::height / 2.0f - 100, 300.0f, 175.0f };
 		if (nk_begin(ctx, "About", s,
 			NK_WINDOW_BORDER | NK_WINDOW_MOVABLE | NK_WINDOW_TITLE)) {
 			nk_layout_row_dynamic(ctx, 20, 1);
@@ -404,7 +426,7 @@ void app::logic() {
 	}
 
 
-	if (0 == nk_item_is_any_active(ctx)) {
+	if (0 == nk_item_is_any_active(ctx) && 0 == nk_window_is_any_hovered(ctx)) {
 
 		setStyle(app::ctx, true);
 
@@ -419,6 +441,8 @@ void app::logic() {
 		case navigation_lrclick_combi:
 		default:
 		
+			// TODO: Only move, if this button-hold was induced by a button click outside any nuklear-widgets!
+
 			bool left = glfwGetMouseButton(app::window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS;
 			bool right = glfwGetMouseButton(app::window, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS;
 			
@@ -472,8 +496,10 @@ void app::logic() {
 
 }
 void app::render() {
-
-
+	/*static bool changed = true;
+	app::progrenderer->render(app::renderF, changed);
+	changed = false;
+	*/
 }
 void app::display() {
 		
@@ -482,43 +508,34 @@ void app::display() {
 
 	glErrors("app::display");
 
-
+	/*
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 	glViewport(0, 0, app::width, app::height);
 	glClear(GL_COLOR_BUFFER_BIT);
 	glClearColor(1.0f, 0.0f, 1.0f, 1.0f);
+	*/
 
-
-
+	/*
 	app::optim->optimize((sRenderer*)app::renderer.data());
-
-	while (app::renderer->renderTile([this](ARect tile) -> void {
-		glClear(GL_COLOR_BUFFER_BIT);
-		glClearColor(0.0f, 0.0f, 1.0f, 1.0f);
-
-		app::program->use();
-
-		glUniform2f(app::uniform.c, cx, cy);
-		glUniform2f(app::uniform.zoom, zoomx, zoomy);
-		glUniform2f(app::uniform.pos, posx, posy);
-		glUniform1i(app::uniform.iter, iter);
-		glUniform1fv(app::uniform.coe, MAX_POLY, coe);
-		glUniform1i(app::uniform.coec, coec);
-		glErrors("app::uniform");
-
-		app::colorMap->use(GL_TEXTURE0);
-	})) {
+	while (app::renderer->renderTile([this](ARect tile) -> void { app::renderF(); })) {
 		glBindFramebuffer(GL_FRAMEBUFFER, 0);
 		glViewport(0, 0, app::width, app::height);
 		app::texprogram->use();
 		app::renderer->drawTile();
 	}
-	
+	*/
+
 	////////////////////////////////////
 
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 	glViewport(0, 0, app::width, app::height);
 
+	app::renderer->render();
+
+	/*
+	app::texprogram->use();
+	app::progrenderer->draw();
+	*/
 	//app::texprogram->use();
 	//buf1->readFrom();
 	//app::quad->draw();

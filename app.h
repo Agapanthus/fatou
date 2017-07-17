@@ -12,7 +12,8 @@
 
 #include "stdafx.h"
 #include "GLHelpers.h"
-#include "renderer.h"
+#include "aRenderer.h"
+#include "data.h"
 
 
 /////////////////////////////////////////////////////////////////////////////////////////
@@ -45,13 +46,10 @@ private:
 	///////////////////// Ressources
 
 	pointer<shader> program;
-	pointer<shader> texprogram;
 	pointer<texture> colorMap;
-	pointer<vao> quad;
-	//pointer<syncBuffer> buf1;
-	pointer<tRenderer> renderer;
 	AiSize tiles;
-	pointer<fOptimizer> optim;
+	pointer<aRenderer> renderer;
+
 
 	///////////////////// Parameters
 
@@ -75,6 +73,7 @@ private:
 	int width, height;
 	GLint maxTextureSize;
 	bool isFullscreen;
+	function<void(void)> renderF;
 
 
 	///////////////////// Interaction
@@ -99,7 +98,3 @@ private:
 
 
 };
-
-extern const string mainVertexShader;
-extern const string mainFragmentShader;
-extern const float quadVertices[];
