@@ -30,7 +30,7 @@ app::app(GLFWwindow *window, nk_context* ctx) :
 	lastTime(UINT32_MAX),
 	window(window), ctx(ctx),
 	navigationMode(navigation_lrclick_combi),
-	supers(1.0f), tiles(3,3),
+	supers(1.0f), tiles(1,1),
 	targetFRate(25),
 	biasPower(-40), show_about(false), isFullscreen(false),
 	show_polynomial(true),
@@ -44,6 +44,8 @@ app::app(GLFWwindow *window, nk_context* ctx) :
 	coet[1] = -1.0f;
 	coet[4] = 20.0f;
 	coet[7] = 100.0f;
+	coet[205] = 100.0f;
+	coet[75] = 100.0f;
 	//coet[44] = 20.0f;
 		
 	app::program.reset(new shader(mainVertexShader, mainFragmentShader));
@@ -121,9 +123,8 @@ void app::keypressed(int key) {
 
 
 void app::reshape(int w, int h) {
-
-	//app::optim->hint( float(w*h) / (app::width*app::height));
-
+	// TODO: When the application window is scaled while rendering with low framerate (=5) under windows, the application sometimes stops presenting frames anymore!
+	
 	app::width = w;
 	app::height = h;
 	glViewport(0, 0, app::width, app::height);
@@ -176,7 +177,7 @@ void app::logic() {
 	if(app::show_tooltips) {\
 		bounds = nk_widget_bounds(ctx); \
 		if (nk_input_is_mouse_hovering_rect(in, bounds) \
-			&& nk_window_is_hovered(ctx) /*otherwise tooltips will even appear when the hovered element is invisible */) \
+			&& nk_window_is_hovered(ctx) /*otherwise tooltips will even appear when the hovered element is invisible. !!! TODO: But they still appear, when hovering another window which is ontop of them!*/) \
 			nk_tooltip(ctx, TEXT); \
 	}
 
@@ -284,6 +285,11 @@ void app::logic() {
 			// TODO
 
 			nk_layout_row_dynamic(ctx, 20, 1);
+			TOOLTIP("Instead of discarding outdated image data, it is progressively interpolated with new data.");
+			nk_checkbox_label(ctx, "Progressive update", &titlebar);
+			// TODO: Dazu auch eine Prozentanzeige "Veraltete Texel: 23.5%", die dann schnell absinkt
+
+			nk_layout_row_dynamic(ctx, 20, 1);
 			TOOLTIP("Enables \"deep zoom\" and improves image quality but is much slower!");
 			static int titlebar2 = true;
 			nk_checkbox_label(ctx, "Double precision", &titlebar2);
@@ -324,10 +330,18 @@ void app::logic() {
 
 		if (nk_tree_push(ctx, NK_TREE_TAB, "Navigation", NK_MINIMIZED)) {
 
+
+			nk_layout_row_dynamic(ctx, 20, 1);
+			TOOLTIP("Instead of discarding all data when the camera is moving, some Pixels are calcluted by interpolation of old ones. Might lead to heterogenous pixel density!");
+			static int titlebar = true;
+			nk_checkbox_label(ctx, "Recycle Texels", &titlebar);
+			// TODO
+
 			nk_layout_row_dynamic(ctx, 25, 1);
 			if (nk_button_label(ctx, "Navigate there")) {
 				glfwSetWindowShouldClose(app::window, true);
 			}		
+			// TODO
 
 			nk_tree_pop(ctx);
 

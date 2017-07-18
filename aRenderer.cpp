@@ -18,7 +18,7 @@
 /*****************************[      autoRenderer       ]*******************************/
 
 aRenderer::aRenderer(AiSize size, AiSize tiles, float maxEffort, float targetFramerate, function<void(void)> renderF) :
-	tiles(tiles), maxEffort(maxEffort), renderF(renderF), windowSize(size) {
+	tiles(tiles), maxEffort(maxEffort), renderF(renderF), windowSize(size), useProgressive(true) {
 	tR.reset(new tRenderer(size, tiles, maxEffort));
 
 	texprogram.reset(new shader(mainVertexShader, viewtexture));
@@ -28,6 +28,8 @@ aRenderer::aRenderer(AiSize size, AiSize tiles, float maxEffort, float targetFra
 	optim.reset(new fOptimizer(targetFramerate, maxEffort));
 	octx.reset(new offscreenctx<worker, workerMsg>(new worker()));
 	octx->start();
+
+	// TODO: in animation, automatically turn tiles to 1,1 if the density is less than 1 
 }
 
 
@@ -38,21 +40,28 @@ aRenderer::~aRenderer() {
 
 
 void aRenderer::render() {
-
-	optim->optimize((sRenderer*)tR.data());
-	while (tR->renderTile([this](ARect tile) -> void { renderF(); })) {
-		glBindFramebuffer(GL_FRAMEBUFFER, 0);
-		glViewport(0, 0, aRenderer::windowSize.w, aRenderer::windowSize.h);
-		texprogram->use();
-		tR->drawTile();
+	if (aRenderer::useProgressive) {
+		optim->optimize(nullptr);
 	}
-
+	else {
+		optim->optimize((sRenderer*)tR.data());
+		while (tR->renderTile([this](ARect tile) -> void { renderF(); })) {
+			glBindFramebuffer(GL_FRAMEBUFFER, 0);
+			glViewport(0, 0, aRenderer::windowSize.w, aRenderer::windowSize.h);
+			texprogram->use();
+			tR->drawTile();
+		}
+	}
 }
 void aRenderer::setSize(AiSize size) {
-	aRenderer::tR->setSize(size, tiles, maxEffort);
-	aRenderer::optim->hint(float(windowSize.w*windowSize.h) / (size.w*size.h));
-	octx->push(sizeChangeMessage(size));
-	windowSize = size;
+	if (aRenderer::useProgressive) {
+		octx->push(sizeChangeMessage(size));
+	}
+	else {
+		aRenderer::tR->setSize(size, tiles, maxEffort);
+	}
+	windowSize = size;	
+	aRenderer::optim->hint(float(windowSize.w*windowSize.h) / (size.w*size.h)); // TODO: This won't work properly when maximizing a window with degree 200 polynomials inside!
 }
 
 void aRenderer::setMaxEffort(float effort) {

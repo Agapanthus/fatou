@@ -30,12 +30,13 @@ public:
 	float getFramerate();
 
 
-	pointer<shader> texprogram;
-//protected:
+protected:
 	pointer<fOptimizer> optim;
 	AiSize windowSize;
 	float maxEffort;
 	AiSize tiles;
+	pointer<shader> texprogram;
+	bool useProgressive;
 
 	pointer<tRenderer> tR;
 	pointer<offscreenctx<worker, workerMsg>> octx;

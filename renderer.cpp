@@ -178,7 +178,7 @@ void fOptimizer::optimize(sRenderer *renderer) {
 	// TODO: Implement parameterChange
 	if (fOptimizer::inited == false) {
 		fOptimizer::inited = true;
-		renderer->setEffort(0.1f);
+		if(renderer) renderer->setEffort(0.1f);
 		fOptimizer::floatingTime = QPC::get();
 	}
 	else {
@@ -204,7 +204,10 @@ void fOptimizer::optimize(sRenderer *renderer) {
 		}
 
 
-		if ( (abs(ratio - 1.0f) > 0.1f && notAgain <= 0) || (abs(ratio - 1.0f) > 0.01f && notAgain < int(-3.0f* fOptimizer::targetFrameRate))) {
+		if ( renderer && 
+			( (abs(ratio - 1.0f) > 0.1f && notAgain <= 0) 
+				|| (abs(ratio - 1.0f) > 0.01f && notAgain < int(-3.0f* fOptimizer::targetFrameRate)))) {
+			
 			notAgain = 10;
 
 			fOptimizer::cuEffort = 1.0f;
@@ -249,7 +252,7 @@ float fOptimizer::getFramerate() const {
 /*****************************[        tRenderer        ]*******************************/
 
 tRenderer::tRenderer(AiSize size, AiSize tiles, float maxEffort) : 
-	effort(0.1f), tilec(0), tileArea(0.0f,0.0f,0.0f,0.0f) {
+	effort(0.01f), tilec(0), tileArea(0.0f,0.0f,0.0f,0.0f) {
 	tRenderer::setSize(size, tiles, maxEffort);
 }
 tRenderer::~tRenderer() {
@@ -259,7 +262,7 @@ void tRenderer::setSize(AiSize size, AiSize tiles, float maxEffort) {
 	tRenderer::maxEffort = maxEffort;
 	tRenderer::tiles = tiles;
 	tRenderer::size = size;
-	tRenderer::tile.reset(new rTile(AiSize( int(ceil(size.w / float(tiles.w))), int(ceil(size.h / float(tiles.h)))), tRenderer::maxEffort));
+	tRenderer::tile.reset(new rTile(AiSize( int(ceil(size.w / float(tiles.w))), int(ceil(size.h / float(tiles.h)))), tRenderer::maxEffort, (tiles.w*tiles.h == 1) ? GL_LINEAR : GL_NEAREST));
 	tRenderer::tile->setEffortQ(tRenderer::effort);
 }
 bool tRenderer::renderTile(std::function<void(ARect tile)> content) {
