@@ -23,7 +23,7 @@ public:
 	~rTile();
 
 	void render(function<void(ARect tile)> content, AiSize tileSize, ARect position);
-	void draw(GLuint textureID = UINT32_MAX);
+	void draw(GLuint textureID = GL_TEXTURE0);
 
 	void scale(AiSize size, float effort);
 
@@ -33,7 +33,7 @@ public:
 	int getIter();
 	AiSize getSize();
 
-	void bind(GLuint textureID = UINT32_MAX);
+	void bind(GLuint textureID = GL_TEXTURE0);
 
 	void framebufferWrite();
 
@@ -101,7 +101,7 @@ public:
 	
 	// Returns true, if there are tiles left
 	bool renderTile(function<void(ARect tile)> content);
-	void drawTile(GLuint textureID = UINT32_MAX);
+	void drawTile(GLuint textureID = GL_TEXTURE0);
 
 	void setEffort(float effort);
 	float getEffort() const;

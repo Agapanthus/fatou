@@ -11,8 +11,9 @@
 #pragma once
 #include "stdafx.h"
 #include "renderer.h"
-#include "parallelctx.h"
-#include "worker.h"
+#include "pRenderer.h"
+//#include "parallelctx.h"
+//#include "worker.h"
 
 
 /////////////////////////////////////////////////////////////////////////////////////////
@@ -39,6 +40,7 @@ protected:
 	bool useProgressive;
 
 	pointer<tRenderer> tR;
-	pointer<offscreenctx<worker, workerMsg>> octx;
+	pointer<pRenderer> pR;
+	//pointer<offscreenctx<worker, workerMsg>> octx;
 	function<void(void)> renderF;
 };

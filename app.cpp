@@ -35,17 +35,17 @@ app::app(GLFWwindow *window, nk_context* ctx) :
 	biasPower(-40), show_about(false), isFullscreen(false),
 	show_polynomial(true),
 	trace_length(0), show_roots(false), show_tooltips(true),
-	maxDensity(2), maxDensityI(densityTable[maxDensity])
+	maxDensity(1), maxDensityI(densityTable[maxDensity])
 {
 
 	glErrors("app::before");
 	for (size_t p = 0; p < MAX_POLY; p++) coe[p] = coet[p] = 0.0f;
 	coet[0] = -1.0f;
-	coet[1] = -1.0f;
+	//coet[1] = -1.0f;
 	coet[4] = 20.0f;
-	coet[7] = 100.0f;
-	coet[205] = 100.0f;
-	coet[75] = 100.0f;
+	//coet[7] = 100.0f;
+	//coet[205] = 100.0f;
+	//coet[75] = 100.0f;
 	//coet[44] = 20.0f;
 		
 	app::program.reset(new shader(mainVertexShader, mainFragmentShader));
@@ -82,8 +82,8 @@ app::app(GLFWwindow *window, nk_context* ctx) :
 	//app::octx.reset(new offscreenctx<worker, workerMsg>(new worker()));
 
 	app::renderF = [this](void) -> void {
-		glClear(GL_COLOR_BUFFER_BIT);
-		glClearColor(0.0f, 0.0f, 1.0f, 1.0f);
+		//glClear(GL_COLOR_BUFFER_BIT);
+		//glClearColor(0.0f, 0.0f, 1.0f, 1.0f);
 
 		app::program->use();
 

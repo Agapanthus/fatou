@@ -26,8 +26,11 @@ aRenderer::aRenderer(AiSize size, AiSize tiles, float maxEffort, float targetFra
 	glUniform1i(texprogram->getUniform("screenTexture"), 0);
 
 	optim.reset(new fOptimizer(targetFramerate, maxEffort));
-	octx.reset(new offscreenctx<worker, workerMsg>(new worker()));
-	octx->start();
+
+	pR.reset(new pRenderer(size, maxEffort));
+
+	//octx.reset(new offscreenctx<worker, workerMsg>(new worker()));
+	//octx->start();
 
 	// TODO: in animation, automatically turn tiles to 1,1 if the density is less than 1 
 }
@@ -35,13 +38,18 @@ aRenderer::aRenderer(AiSize size, AiSize tiles, float maxEffort, float targetFra
 
 aRenderer::~aRenderer() {
 	// Destroy the context first! this important, because it shares resources with this class which become unavailable during destruction...
-	octx.reset(0, false);
+	//octx.reset(0, false);
 }
 
 
 void aRenderer::render() {
 	if (aRenderer::useProgressive) {
-		optim->optimize(nullptr);
+		optim->optimize((sRenderer*)pR.data());
+		pR->render(renderF);
+		glBindFramebuffer(GL_FRAMEBUFFER, 0);
+		glViewport(0, 0, aRenderer::windowSize.w, aRenderer::windowSize.h);
+		texprogram->use();
+		pR->draw();
 	}
 	else {
 		optim->optimize((sRenderer*)tR.data());
@@ -55,7 +63,8 @@ void aRenderer::render() {
 }
 void aRenderer::setSize(AiSize size) {
 	if (aRenderer::useProgressive) {
-		octx->push(sizeChangeMessage(size));
+		//octx->push(sizeChangeMessage(size));
+		aRenderer::pR->setSize(size, maxEffort);
 	}
 	else {
 		aRenderer::tR->setSize(size, tiles, maxEffort);
@@ -66,6 +75,8 @@ void aRenderer::setSize(AiSize size) {
 
 void aRenderer::setMaxEffort(float effort) {
 	aRenderer::optim->setMaxEffort(effort);
+	aRenderer::maxEffort = effort;
+	aRenderer::pR->setSize(windowSize, maxEffort);
 }
 
 void aRenderer::setTargetFramerate(float framerate) {

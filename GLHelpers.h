@@ -42,7 +42,7 @@ public:
 	texture(const std::vector<unsigned char> &image, unsigned int width, unsigned int height);
 	texture(const std::string &filename);
 	~texture();
-	void use(GLuint textureID = UINT32_MAX);
+	void use(GLuint textureID = GL_TEXTURE0);
 protected:
 	void init(const std::vector<unsigned char> &image, unsigned int width, unsigned int height);
 	GLuint tex;
@@ -69,10 +69,8 @@ protected:
 class sQuad : protected vao {
 public:
 	sQuad();
-	void draw(ARect pos, ARect post, bool transTexCoord = false);
+	void draw(ARect pos = ARect(0.0f, 0.0f, 1.0f, 1.0f), ARect post = ARect(0.0f, 0.0f, 1.0f, 1.0f));
 	~sQuad();
-protected:
-	float quadVertices[24];
 };
 
 /////////////////////////////////////////////////////////////////////////////////////////
@@ -84,13 +82,32 @@ public:
 	~syncBuffer();
 	void writeTo(std::function<void(void)> content);
 	void scale(AiSize iSize, bool useMipmap);
-	void readFrom(GLuint textureID = UINT32_MAX);
+	void readFrom(GLuint textureID = GL_TEXTURE0);
 	void framebufferRead();
 	void framebufferWrite();
 	AiSize getSize();
 protected:
-	GLuint framebuffer,/* rbo, */ tex;
+	GLuint framebuffer, tex;
 	AiSize iSize;
 	bool useMipmap;
+	GLuint quality;
+};
+
+
+/////////////////////////////////////////////////////////////////////////////////////////
+/*****************************[  Volumetric Sync buffer ]*******************************/
+
+class syncBuffer3d {
+public:
+	syncBuffer3d(AiSize iSize, uint32 depth, GLuint quality = GL_NEAREST, GLuint qualityM = GL_NEAREST);
+	~syncBuffer3d();
+	void writeTo(uint32 layer);
+	void scale(AiSize iSize);
+	void bind(GLuint textureID = GL_TEXTURE0);
+	AiSize getSize();
+protected:
+	GLuint *framebuffers, tex;
+	AiSize iSize;
+	uint32 depth;
 	GLuint quality;
 };

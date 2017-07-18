@@ -92,16 +92,14 @@ typedef uint32_t uint32;
 typedef uint64_t uint64;
 #endif
 
-inline float maximum(float a, float b) {
+template<typename T> inline T maximum(T a, T b) {
 	if (a > b) return a;
 	else return b;
 }
-
-inline float minimum(float a, float b) {
+template<typename T> inline T minimum(T a, T b) {
 	if (a < b) return a;
 	else return b;
 }
-
 
 /////////////////////////////////////////////////////////////////////////////////////////
 /*****************************[     Error Handling       ]******************************/
@@ -194,6 +192,7 @@ struct AiSize {
 };
 
 struct ASize {
+	explicit ASize(AiSize in) : w(float(in.w)), h(float(in.h)) {}
 	ASize(float w, float h) : w(w), h(h) {}
 	ASize() : w(0.0f), h(0.0f) {}
 	float w, h;
@@ -209,6 +208,19 @@ struct ASize {
 	}
 	inline bool operator>(const ASize& compare) const {
 		return ((w > compare.w) && (h > compare.h));
+	}
+	
+	inline ASize operator/(const ASize &div) const {
+		return ASize(ASize::w / div.w, ASize::h / div.h);
+	}
+	inline ASize operator+(const ASize &div) const {
+		return ASize(ASize::w + div.w, ASize::h + div.h);
+	}
+	inline ASize operator*(const ASize &div) const {
+		return ASize(ASize::w * div.w, ASize::h * div.h);
+	}
+	inline ASize operator-(const ASize &div) const {
+		return ASize(ASize::w - div.w, ASize::h - div.h);
 	}
 };
 
@@ -236,6 +248,9 @@ struct ARect {
 
 	inline ARect operator+(const ARect& sum) const {
 		return ARect(ARect::left + sum.left, ARect::top + sum.top, ARect::right + sum.right, ARect::bottom + sum.bottom);
+	}
+	inline ARect operator+(const ASize &sum) const {
+		return ARect(ARect::left + sum.w, ARect::top + sum.h, ARect::right + sum.w, ARect::bottom + sum.h);
 	}
 };
 
@@ -334,6 +349,9 @@ public:
 	}
 	const T *data() const {
 		return c;
+	}
+	bool empty() const {
+		return c == nullptr;
 	}
 private:
 	T *c;

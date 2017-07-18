@@ -36,7 +36,7 @@ void worker::render() {
 		}
 	}
 
-	// Render a Frame 
+	// Render a
 
 
 }

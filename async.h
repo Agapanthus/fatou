@@ -24,7 +24,7 @@ public:
 	~asyncBuffer();
 	void startJob(function<void(void)> job);
 	bool isWorking();
-	void readFrom(GLuint textureID = UINT32_MAX);
+	void readFrom(GLuint textureID = GL_TEXTURE0);
 	void scale(AiSize size);
 	void framebufferRead();
 	AiSize getSize();
@@ -66,7 +66,7 @@ private:
 
 /////////////////////////////////////////////////////////////////////////////////////////
 /*****************************[        pRenderer        ]*******************************/
-
+/*
 class pRenderer : public ANoncopyable {
 public:
 	pRenderer(AiSize size, float millisecondsPerFrame, float maxEffort);
@@ -87,4 +87,4 @@ public:
 private:
 	rTile tile;
 	glqueue queue;
-};
+};*/
