@@ -252,6 +252,15 @@ struct ARect {
 	inline ARect operator+(const ASize &sum) const {
 		return ARect(ARect::left + sum.w, ARect::top + sum.h, ARect::right + sum.w, ARect::bottom + sum.h);
 	}
+	inline ARect operator/(const ASize &sum) const {
+		return ARect(ARect::left / sum.w, ARect::top / sum.h, ARect::right / sum.w, ARect::bottom / sum.h);
+	}
+	inline ARect operator*(const ASize &sum) const {
+		return ARect(ARect::left * sum.w, ARect::top * sum.h, ARect::right * sum.w, ARect::bottom * sum.h);
+	}
+	inline ARect operator-(const ASize &sum) const {
+		return ARect(ARect::left - sum.w, ARect::top - sum.h, ARect::right - sum.w, ARect::bottom - sum.h);
+	}
 };
 
 // int32 - Rect 

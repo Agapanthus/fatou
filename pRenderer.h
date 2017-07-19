@@ -16,7 +16,7 @@
 /////////////////////////////////////////////////////////////////////////////////////////
 /*****************************[   Progressive Buffer    ]*******************************/
 
-#define QUEUE_LENGTH_R 20
+#define QUEUE_LENGTH_R 40
 #define QUEUE_LENGTH (QUEUE_LENGTH_R*QUEUE_LENGTH_R)
 
 // Render parts of a frame, almost arbitrarily small parts, an then, compose them to a whole frame
@@ -38,7 +38,7 @@ private:
 	pointer<syncBuffer3d> buffer;
 
 	struct {
-		GLuint texture, maxZ, stepSize, pixelSizeX, pixelSizeY, queue_r;
+		GLuint texture, winSizeX, winSizeY, queue_l , queue_r, maxZ, scale;
 	} uniform;
 
 	sQuad quad;

@@ -439,10 +439,16 @@ void app::logic() {
 		else show_about = false;
 	}
 
-
+	bool nuklearHandledEvents = true;
 	if (0 == nk_item_is_any_active(ctx) && 0 == nk_window_is_any_hovered(ctx)) {
-
+		nuklearHandledEvents = false;
 		setStyle(app::ctx, true);
+
+	}
+	else {
+		setStyle(app::ctx, false);
+	}
+
 
 		///////////////////// Navigate
 
@@ -457,8 +463,8 @@ void app::logic() {
 		
 			// TODO: Only move, if this button-hold was induced by a button click outside any nuklear-widgets!
 
-			bool left = glfwGetMouseButton(app::window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS;
-			bool right = glfwGetMouseButton(app::window, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS;
+			bool left = nuklearHandledEvents ? false : glfwGetMouseButton(app::window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS;
+			bool right = nuklearHandledEvents ? false : glfwGetMouseButton(app::window, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS;
 			
 			static const float zoomSpeed = 0.0005f; // 2000.0f;
 			static const float moveSpeed = 0.03f; // 30.0f;
@@ -471,7 +477,7 @@ void app::logic() {
 				app::zoom *= timeElapsed * zoomSpeed + 1.0f;
 				//app::zoomy *= timeElapsed * zoomSpeed + 1.0f;
 			}
-			float aspect = float(app::width) / float(app::height);
+			//float aspect = float(app::width) / float(app::height);
 			app::zoomx = app::zoom * (app::width/1000.0f);
 			app::zoomy = app::zoom * (app::height/1000.0f);
 
@@ -485,11 +491,6 @@ void app::logic() {
 
 			break;
 		}
-
-	}
-	else {
-		setStyle(app::ctx, false);
-	}
 
 
 	///////////////////// Animate Polynomials
