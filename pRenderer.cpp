@@ -32,7 +32,7 @@ const string composerShader(
 	"	int y = (int(ceil(winSize.y * TexCoords.y)) - 1) % queue_r;"
 	"	float layer = (x + (queue_r*y)) / (queue_l-1);"
 	"	if(layer > maxZ) layer = maxZ;"
-//	"	gl_FragColor = texture(tex, vec3(TexCoords, layer))*0.0 + vec4(layer, layer,0.0f, 1.0f);\n"
+	//	"	gl_FragColor = texture(tex, vec3(TexCoords, layer))*0.0 + vec4(layer, layer,0.0f, 1.0f);\n"
 	"	gl_FragColor = texture(tex, vec3(TexCoords.x * scale.x , TexCoords.y * scale.y, layer));\n"
 	"}");
 
@@ -46,14 +46,14 @@ int roundUpToNextMultipleOfN(int numToRound, int N) {
 }
 
 pBuffer::pBuffer(AiSize size) :
-	syncBuffer(size, false, GL_LINEAR, GL_NEAREST), size(0,0) {
+	syncBuffer(size, false, GL_LINEAR, GL_NEAREST), size(0, 0) {
 
 	// Check if there are enough texture units for interpolation
-/*	GLint texture_units = 0;
+	/*	GLint texture_units = 0;
 	glGetIntegerv(GL_MAX_TEXTURE_IMAGE_UNITS, &texture_units);
 	glErrors("pRenderer::getMaxTextureImageUnits");
 	if (texture_units < QUEUE_LENGTH) {
-		fatalNote("GPU doesn't support " << QUEUE_LENGTH << " textures per fragment shader");
+	fatalNote("GPU doesn't support " << QUEUE_LENGTH << " textures per fragment shader");
 	}*/
 
 	pBuffer::composer.reset(new shader(mainVertexShader, composerShader));
@@ -66,7 +66,7 @@ pBuffer::pBuffer(AiSize size) :
 	uniform.queue_r = pBuffer::composer->getUniform("queue_r");
 	uniform.scale = pBuffer::composer->getUniform("scale");
 	glUniform1i(uniform.texture, 0);
-	
+
 	pBuffer::scale(size);
 	//glGenQueries(QUEUE_LENGTH, pBuffer::queries);
 }
@@ -78,7 +78,7 @@ void pBuffer::scale(AiSize size) {
 	fassert(QUEUE_LENGTH > 0);
 
 	if (size != pBuffer::size) {
-		if(size != syncBuffer::iSize) 
+		if (size != syncBuffer::iSize)
 			syncBuffer::scale(size, false);
 
 		if (buffer.empty())
@@ -101,25 +101,25 @@ void pBuffer::render(float effort, function<void(void)> renderF) {
 	while (effort > 0.0f) {
 		if (pBuffer::currentBuffer == QUEUE_LENGTH) break;
 
-		int posxnew = buffer->getSize().w - 1; // minimum(uint32(buffer->getSize().w), uint32(round(posx + (float(QUEUE_LENGTH) * effort * float(buffer->getSize().w)))));
+		int posxnew = minimum(int(buffer->getSize().w), int(round(posx + (float(QUEUE_LENGTH) * effort * float(buffer->getSize().w)))));
 		if (posxnew == posx) {
-			break; 
+			break;
 		}
 		ASize ratio(ASize(buffer->getSize() * QUEUE_LENGTH_R) / ASize(size));
-		ARect part(0.0f, 0.0f, 1.0f, 1.0f); // float(posx) / float(buffer->getSize().w), 0.0f, float(posxnew) / float(buffer->getSize().w), 1.0f);
-		ARect partT = part * ASize(ratio.w, ratio.h) ;
+		ARect part(float(posx) / float(buffer->getSize().w), 0.0f, float(posxnew) / float(buffer->getSize().w), 1.0f);
+		ARect partT = part * ASize(ratio.w, ratio.h);
 
 		pBuffer::posx = posxnew;
 
-		ASize delta((((pBuffer::currentBuffer ) % QUEUE_LENGTH_R ) + 0.5f) / float(QUEUE_LENGTH_R) - 0.5f,
-			 (((pBuffer::currentBuffer ) / QUEUE_LENGTH_R ) + 0.5f) / float(QUEUE_LENGTH_R) - 0.5f);
+		ASize delta((((pBuffer::currentBuffer) % QUEUE_LENGTH_R) + 0.5f) / float(QUEUE_LENGTH_R) - 0.5f,
+			(((pBuffer::currentBuffer) / QUEUE_LENGTH_R) + 0.5f) / float(QUEUE_LENGTH_R) - 0.5f);
 		delta = delta / ASize(buffer->getSize());
-		
+
 		changed = true;
 		buffer->writeTo(pBuffer::currentBuffer);
 		renderF();
-		quad.draw(part, partT+delta);
-		if (posxnew == buffer->getSize().w-1) {
+		quad.draw(part, partT + delta);
+		if (posxnew == buffer->getSize().w) {
 			pBuffer::currentBuffer++;
 			pBuffer::posx = 0;
 		}
@@ -128,25 +128,13 @@ void pBuffer::render(float effort, function<void(void)> renderF) {
 	if (changed) pBuffer::compose();
 }
 void pBuffer::compose() {
-	//buffers[0]->framebufferRead();
-	//syncBuffer::framebufferWrite();
-	//glBlitFramebuffer(0, 0, size.w, size.h, 0, 0, size.w, size.h, GL_COLOR_BUFFER_BIT, GL_NEAREST);
-
-	/*
-	for (size_t i = 0; i < QUEUE_LENGTH; i++) {
-		glActiveTexture(GL_TEXTURE0 + i);
-		buffers[i]->readFrom(GL_TEXTURE0 + i);
-	}
-	*/
-
-
 
 	buffer->bind(GL_TEXTURE0);
-	
+
 	syncBuffer::writeTo([this](void)->void {
 		composer->use();
 		glUniform1f(uniform.maxZ, maximum(0, int32(pBuffer::currentBuffer) - 1) / maximum(1.0f, float(QUEUE_LENGTH - 1)));
-		glUniform1f(uniform.queue_l,  float(QUEUE_LENGTH) );
+		glUniform1f(uniform.queue_l, float(QUEUE_LENGTH));
 		glUniform2i(uniform.winSize, size.w, size.h);
 		glUniform1i(uniform.queue_r, (QUEUE_LENGTH_R));
 		glUniform2f(uniform.scale, float(size.w) / float(buffer->getSize().w*QUEUE_LENGTH_R), float(size.h) / float(buffer->getSize().h*QUEUE_LENGTH_R));
@@ -158,10 +146,10 @@ void pBuffer::compose() {
 		ASize Relation(float(pBuffer::size.w) / float(pBuffer::buffer->getSize().w * QUEUE_LENGTH_R),
 			float(pBuffer::size.h) / float(pBuffer::buffer->getSize().h * QUEUE_LENGTH_R));
 		partT = partT * Relation;
-		
+
 		pBuffer::quad.draw(part, partT);
 	});
-	
+
 }
 
 
@@ -181,7 +169,6 @@ void pRenderer::render(function<void(void)> renderF) {
 }
 
 void pRenderer::setSize(AiSize size, float maxEffort) {
-	//cout << toString(size) << maxEffort << endl;
 	pRenderer::maxEffort = maxEffort;
 	pRenderer::size = size;
 	buffer->scale(AiSize(int(ceil(size.w * maxEffort)), int(ceil(size.h*maxEffort))));
@@ -191,11 +178,8 @@ void pRenderer::setEffort(float effort) {
 	fassert(pRenderer::maxEffort >= effort);
 
 	effort = 100.0f / size.h;
-/*
-	if (pRenderer::effort != effort) {
-		pRenderer::buffer->setEffort(effort / pRenderer::maxEffort);
-	}*/
-	pRenderer::effort = effort;	
+	
+	pRenderer::effort = effort;
 }
 float pRenderer::getEffort() const {
 	return pRenderer::effort;
