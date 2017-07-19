@@ -38,7 +38,7 @@ private:
 	pointer<syncBuffer3d> buffer;
 
 	struct {
-		GLuint texture, winSizeX, winSizeY, queue_l , queue_r, maxZ, scale;
+		GLuint texture, winSize, queue_l , queue_r, maxZ, scale;
 	} uniform;
 
 	sQuad quad;
