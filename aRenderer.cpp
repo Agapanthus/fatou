@@ -42,14 +42,14 @@ aRenderer::~aRenderer() {
 }
 
 
-void aRenderer::render() {
+void aRenderer::render(int x, int y) {
 	if (aRenderer::useProgressive) {
 		optim->optimize((sRenderer*)pR.data());
 		pR->render(renderF);
 		glBindFramebuffer(GL_FRAMEBUFFER, 0);
 		glViewport(0, 0, aRenderer::windowSize.w, aRenderer::windowSize.h);
 		texprogram->use();
-		pR->draw();
+		pR->draw(x, y);
 	}
 	else {
 		optim->optimize((sRenderer*)tR.data());

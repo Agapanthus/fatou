@@ -16,8 +16,11 @@
 /////////////////////////////////////////////////////////////////////////////////////////
 /*****************************[   Progressive Buffer    ]*******************************/
 
-#define QUEUE_LENGTH_R 40
-#define QUEUE_LENGTH (QUEUE_LENGTH_R*QUEUE_LENGTH_R)
+#define QUEUE_LENGTH_R 10
+#define QUEUE_LENGTH_X QUEUE_LENGTH_R
+#define QUEUE_LENGTH_Y QUEUE_LENGTH_R
+// TODO: Implement X != Y
+#define QUEUE_LENGTH (QUEUE_LENGTH_X*QUEUE_LENGTH_Y)
 
 // Render parts of a frame, almost arbitrarily small parts, an then, compose them to a whole frame
 class pBuffer : public syncBuffer {
@@ -28,7 +31,7 @@ public:
 	void scale(AiSize size); 
 
 
-	void draw();
+	void draw(int x, int y);
 	void compose();
 	void render(float effort, function<void(void)> renderF);
 
@@ -37,8 +40,14 @@ private:
 	//GLuint queries[QUEUE_LENGTH];
 	pointer<syncBuffer3d> buffer;
 
+	vector<int32> permutationMap;
+
+	pointer<floatStorage> coeffBuffer;
+	void recalculateCoeff();
+
 	struct {
-		GLuint texture, winSize, queue_l , queue_r, maxZ, scale;
+		GLuint texture, queue_l , queue_r, maxZ, interPM, iteration, iWinSize;
+		//GLuint winSize, scale;
 	} uniform;
 
 	sQuad quad;
@@ -48,6 +57,8 @@ private:
 	uint32 currentBuffer;
 
 	pointer<shader> composer;
+	pointer<shader> white;
+	glLine line;
 };
 
 
@@ -65,7 +76,7 @@ public:
 
 	void setEffort(float effort);
 	float getEffort() const;
-	void draw();
+	void draw(int x, int y);
 
 private:
 	pointer<pBuffer> buffer;

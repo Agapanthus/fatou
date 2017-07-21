@@ -74,6 +74,16 @@ public:
 };
 
 /////////////////////////////////////////////////////////////////////////////////////////
+/*****************************[         glLine          ]*******************************/
+
+class glLine : protected vao {
+public:
+	glLine();
+	void draw(ARect pos);
+	~glLine();
+};
+
+/////////////////////////////////////////////////////////////////////////////////////////
 /*****************************[       Sync buffer       ]*******************************/
 
 class syncBuffer {
@@ -81,6 +91,7 @@ public:
 	syncBuffer(AiSize iSize, bool useMipmap, GLuint quality = GL_LINEAR, GLuint qualityM = GL_NEAREST);
 	~syncBuffer();
 	void writeTo(std::function<void(void)> content);
+	void upload(AiSize size, const float *data);
 	void scale(AiSize iSize, bool useMipmap);
 	void readFrom(GLuint textureID = GL_TEXTURE0);
 	void framebufferRead();
@@ -91,6 +102,37 @@ protected:
 	AiSize iSize;
 	bool useMipmap;
 	GLuint quality;
+};
+
+/////////////////////////////////////////////////////////////////////////////////////////
+/*****************************[      float storage      ]*******************************/
+
+class floatStorage {
+public:
+	floatStorage(AiSize iSize);
+	~floatStorage();
+	inline void set(size_t x, size_t y, float a, float b, float c, float d) {
+		fassert(int32(y) < iSize.h);
+		fassert(int32(x) < iSize.w);
+
+		size_t addr = (x+ y*iSize.w) * 4;
+		data[addr + 0] = a;
+		data[addr + 1] = b;
+		data[addr + 2] = c;
+		data[addr + 3] = d;
+	}
+	inline float get(size_t x, size_t y, size_t ele) {
+		size_t addr = (x + y*iSize.w) * 4;
+		return data[addr + ele];
+	}
+	void upload();
+	void scale(AiSize iSize);
+	void bind(GLuint textureID = GL_TEXTURE0);
+	AiSize getSize();
+protected:
+	GLuint tex;
+	AiSize iSize;
+	vector<float> data;
 };
 
 

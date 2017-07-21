@@ -41,10 +41,10 @@ app::app(GLFWwindow *window, nk_context* ctx) :
 	glErrors("app::before");
 	for (size_t p = 0; p < MAX_POLY; p++) coe[p] = coet[p] = 0.0f;
 	coet[0] = -1.0f;
-	//coet[1] = -1.0f;
+	coet[1] = -1.0f;
 	coet[4] = 20.0f;
-	//coet[7] = 100.0f;
-	//coet[205] = 100.0f;
+	coet[7] = 100.0f;
+//	coet[205] = 100.0f;
 	//coet[75] = 100.0f;
 	//coet[44] = 20.0f;
 		
@@ -545,8 +545,11 @@ void app::display() {
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 	glViewport(0, 0, app::width, app::height);
 
-	app::renderer->render();
-
+	{
+		double xpos, ypos;
+		glfwGetCursorPos(app::window, &xpos, &ypos);
+		app::renderer->render(int(xpos), int(ypos));
+	}
 	/*
 	app::texprogram->use();
 	app::progrenderer->draw();

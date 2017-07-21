@@ -268,6 +268,35 @@ void sQuad::draw(ARect pos, ARect post) {
 sQuad::~sQuad() {
 }
 
+
+/////////////////////////////////////////////////////////////////////////////////////////
+/*****************************[         glLine          ]*******************************/
+
+glLine::glLine() : vao(quadVertices_t, sizeof(quadVertices_t), 6, true) {
+}
+void glLine::draw(ARect pos) {
+	pos = pos * 2 - 1;
+	
+	float lineVertices[8];
+	lineVertices[0] = pos.left;
+	lineVertices[1] = pos.top;
+	lineVertices[4] = pos.right;
+	lineVertices[5] = pos.bottom;
+	vao::update(lineVertices, sizeof(lineVertices), 1);
+
+	glBindVertexArray(vao::vaodata);
+	glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+	glDrawArrays(GL_LINES, 0, 2);
+	glBindVertexArray(0);
+	glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+
+	glErrors("glline::draw");
+}
+glLine::~glLine() {
+
+}
+
+
 /////////////////////////////////////////////////////////////////////////////////////////
 /*****************************[       Sync buffer       ]*******************************/
 
@@ -342,8 +371,45 @@ void syncBuffer::framebufferWrite() {
 AiSize syncBuffer::getSize() {
 	return syncBuffer::iSize;
 }
+/*void syncBuffer::upload(AiSize size, const float *data) {
+	syncBuffer::iSize = size;
+	glBindTexture(GL_TEXTURE_2D, syncBuffer::tex);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, syncBuffer::iSize.w, syncBuffer::iSize.h, 0, GL_RGBA, GL_FLOAT, data);
+	if (syncBuffer::useMipmap) {
+		glGenerateMipmap(GL_TEXTURE_2D);
+	}
+}*/
 
+/////////////////////////////////////////////////////////////////////////////////////////
+/*****************************[      float storage      ]*******************************/
 
+floatStorage::floatStorage(AiSize iSize) : iSize(iSize) {
+	glGenTextures(1, &(floatStorage::tex));
+	glBindTexture(GL_TEXTURE_2D, floatStorage::tex);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	floatStorage::data.resize(iSize.w * iSize.h * 4);
+}
+floatStorage::~floatStorage() {
+	glDeleteTextures(1, &(floatStorage::tex));
+}
+void floatStorage::upload() {
+	glBindTexture(GL_TEXTURE_2D, floatStorage::tex);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, floatStorage::iSize.w, floatStorage::iSize.h, 0, GL_RGBA, GL_FLOAT, floatStorage::data.data());
+}
+void floatStorage::scale(AiSize iSize) {
+	floatStorage::iSize = iSize;
+	floatStorage::data.resize(iSize.w * iSize.h * 4);
+}
+void floatStorage::bind(GLuint textureID) {
+	glActiveTexture(textureID);
+	glBindTexture(GL_TEXTURE_2D, floatStorage::tex);
+}
+AiSize floatStorage::getSize() {
+	return floatStorage::iSize;
+}
 
 /////////////////////////////////////////////////////////////////////////////////////////
 /*****************************[  Volumetric Sync buffer ]*******************************/
@@ -357,9 +423,9 @@ syncBuffer3d::syncBuffer3d(AiSize iSize, uint32 depth, GLuint quality, GLuint qu
 	glGenTextures(1, &(syncBuffer3d::tex));
 	glBindTexture(GL_TEXTURE_3D, syncBuffer3d::tex);
 	glTexImage3D(GL_TEXTURE_3D, 0, GL_RGB, syncBuffer3d::iSize.w, syncBuffer3d::iSize.h, syncBuffer3d::depth, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
-	glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
-	glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
-	glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_BORDER);
+	glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
 	glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, qualityM);
 	glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, quality);
 
