@@ -16,7 +16,8 @@
 /////////////////////////////////////////////////////////////////////////////////////////
 /*****************************[   Progressive Buffer    ]*******************************/
 
-#define QUEUE_LENGTH_R 10
+// TODO: increasing QUEUE_LENGTH has SIGNIFICANT negative effect on rendering time! Why and how to solve that?! (--> Seems to be due to frequent FBO binds...)
+#define QUEUE_LENGTH_R 5
 #define QUEUE_LENGTH_X QUEUE_LENGTH_R
 #define QUEUE_LENGTH_Y QUEUE_LENGTH_R
 // TODO: Implement X != Y
@@ -31,6 +32,7 @@ public:
 	void scale(AiSize size); 
 
 
+	void discard();
 	void draw(int x, int y);
 	void compose();
 	void render(float effort, function<void(void)> renderF);
@@ -71,7 +73,7 @@ public:
 	pRenderer(AiSize size, float maxEffort);
 	~pRenderer();
 
-	void render(function<void(void)> renderF);
+	void render(function<void(void)> renderF, bool discard);
 	void setSize(AiSize size, float maxEffort);
 
 	void setEffort(float effort);

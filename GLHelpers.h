@@ -153,3 +153,53 @@ protected:
 	uint32 depth;
 	GLuint quality;
 };
+
+
+/////////////////////////////////////////////////////////////////////////////////////////
+/*****************************[      measure Time       ]*******************************/
+
+class glQuery : ANoncopyable {
+public:
+	// Move constructor, but noncopyable!
+	glQuery(glQuery &&move) : alive(true) {
+		glQuery::query = query;
+		move.alive = false;
+	}
+	glQuery & glQuery::operator=(glQuery &&move) {
+		if (this != &move) {
+			alive = true;
+			query = move.query;
+			move.alive = false;
+		}
+		return *this;
+	}
+	glQuery(GLuint query) : query(query), alive(true) {
+		glBeginQuery(GL_TIME_ELAPSED, query);
+	}
+	~glQuery() {
+		if (alive) {
+			glEndQuery(GL_TIME_ELAPSED);
+			glErrors("glQuery::end");
+		}
+	}
+protected:
+	GLuint query;
+	bool alive;
+};
+class glQueryCreator {
+public:
+	glQueryCreator() {
+		glGenQueries(1, &query);
+	}
+	glQuery create() {
+		return glQuery(query);
+	}
+	float getTime() {
+		GLuint64 elapsed_time;
+		glGetQueryObjectui64v(query, GL_QUERY_RESULT, &elapsed_time);
+		return float(double(elapsed_time) / 1000000.0);
+	}
+	
+protected:
+	GLuint query;
+};

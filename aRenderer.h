@@ -23,7 +23,7 @@ class aRenderer : public ANoncopyable {
 public:
 	aRenderer(AiSize size, AiSize tiles, float maxEffort, float targetFramerate, function<void(void)> renderF);
 	~aRenderer();
-	void render(int x, int y);
+	void render(int x, int y, bool changed);
 	void setSize(AiSize size);
 	void setMaxEffort(float effort);
 	void setTargetFramerate(float framerate);

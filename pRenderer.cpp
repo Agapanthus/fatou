@@ -15,6 +15,8 @@
 #define USE_INTERPOLATION
 #define INTERP_POINTS 4
 
+//#define MEASURE_PERFORMANCE
+
 // TODO: Check GL / GLSL-Version and support of used functions in the beginning of the program!
 
 /////////////////////////////////////////////////////////////////////////////////////////
@@ -39,7 +41,7 @@ const string composerShader(
 	"uniform int iteration;"
 	"uniform int queue_r;"
 	"layout(pixel_center_integer) in vec4 gl_FragCoord;"
-	//"uniform vec2 iWinSize;"
+	
 
 	"void main() {"
 	"	int x = int(gl_FragCoord.x) % queue_r;"
@@ -49,8 +51,6 @@ const string composerShader(
 	// We don't need that. Due to lower resolution, sampler3D with GL_NEAREST does this automatically!
 	//"	vec2 offset = vec2(TexCoords.x - (float(x) * iWinSize.x), TexCoords.y - (float(y) * iWinSize.y) );"
 	// Just load the Pixel
-//	"	gl_FragColor = texture(tex,vec3(0.0f));"
-	//"	gl_FragColor = p1;"
 	"	if(p1[3] == 0.0f) {"
 	"		gl_FragColor = texture(tex, vec3(TexCoords.x + p1[0], TexCoords.y + p1[1], p1[2]));"
 	// Interpolate Pixels
@@ -170,12 +170,16 @@ void pBuffer::scale(AiSize size) {
 		else
 			buffer->scale(((size + QUEUE_LENGTH_R - 1) / QUEUE_LENGTH_R));
 
-		if (coeffBuffer.empty())
+		if (coeffBuffer.empty()) {
 			coeffBuffer.reset(new floatStorage(AiSize(QUEUE_LENGTH, QUEUE_LENGTH*INTERP_POINTS)));
-		else
+			recalculateCoeff(); // TODO: When changing QUEUE_LENGTH this needs to be rerun!
+		}
+		else {
 			coeffBuffer->scale(AiSize(QUEUE_LENGTH, QUEUE_LENGTH*INTERP_POINTS));
-		//coeffBuffer.reset(new syncBuffer(AiSize(QUEUE_LENGTH, QUEUE_LENGTH*INTERP_POINTS), false, GL_NEAREST, GL_NEAREST));
-		recalculateCoeff();
+			recalculateCoeff(); // TODO: When changing QUEUE_LENGTH this needs to be rerun!
+		}
+
+
 	}
 	pBuffer::size = size;
 	pBuffer::posx = 0;
@@ -189,9 +193,6 @@ inline float normLayer(float l) {
 	// (Instead, I'm using GL_CLAMP_TO_EDGE for now.)
 	return layer;
 }
-
-// TODO: Make it use other equivalent points from other tiles!
-// TODO: pre-Renderer with inverse logarithmic effort
 
 inline float netDistance(const AiSize &tile, const AiPoint &a, const AiPoint &b, ASize &relative) {
 	// tile/2 - a        | Define coordinate system with a centered in the tile. Now the distance from a (the origin) to every point p inside the tile is <= the distance from a to each point p' in other tiles.
@@ -219,6 +220,10 @@ inline float netDistance(const AiSize &tile, const AiPoint &a, const AiPoint &b,
 	return (dist - (tile / 2)).magnitude();
 }
 
+
+// TODO: Make it use other equivalent points from other tiles, when there are less than INTERP_POINTS samples!
+// TODO: Do this asynchronously!
+// TODO: Use prettier algorithm: faster and better (smoother?) interpolation!
 void pBuffer::recalculateCoeff() {
 	// Defines the order of layers (maps a layer to each iteration)
 	permutationMap.resize(QUEUE_LENGTH);
@@ -274,7 +279,7 @@ void pBuffer::recalculateCoeff() {
 						}
 					}
 					// Result will depend exponentially on the distance and longer distances give smaller relevances
-					points[p].relevance = pow(0.4f, points[p].dist);
+					points[p].relevance = pow( 3.0f - 2.0 * sqrt(i / float(QUEUE_LENGTH)), -points[p].dist);
 					// zero should stay zero
 					if (points[p].dist == 0.0f) points[p].relevance = 0.0f;
 				}
@@ -309,9 +314,12 @@ void pBuffer::recalculateCoeff() {
 }
 
 void pBuffer::draw(int x, int y) {
-	syncBuffer::readFrom();
-	pBuffer::quad.draw();
+	if (pBuffer::currentBuffer > 0) {
+		syncBuffer::readFrom();
+		pBuffer::quad.draw();
+	}
 	
+#if 0
 	// To visualize, of which other pixels each composed pixel consists
 	if (x >= 0 && y >= 0) {
 		/*
@@ -349,52 +357,70 @@ void pBuffer::draw(int x, int y) {
 
 
 					if (lmposx != mposx || lmposy != mposy) {
-						cout << "pointing: " << xz << " " << yz << "    rel: " << coeffBuffer->get(iter, l*INTERP_POINTS + value, 0) << " " << coeffBuffer->get(iter, l*INTERP_POINTS + value, 1) << "  l: " << coeffBuffer->get(iter, l*INTERP_POINTS + value, 2) << "    target: " << tx << " " << ty << endl;
+				//		cout << "pointing: " << xz << " " << yz << "    rel: " << coeffBuffer->get(iter, l*INTERP_POINTS + value, 0) << " " << coeffBuffer->get(iter, l*INTERP_POINTS + value, 1) << "  l: " << coeffBuffer->get(iter, l*INTERP_POINTS + value, 2) << "    target: " << tx << " " << ty << endl;
 					}
 					APoint source(mposx + (tx - xz) / float(size.w) + coeffBuffer->get(iter, l*INTERP_POINTS + value, 0),
 						mposy + (ty - yz) / float(size.h) + coeffBuffer->get(iter, l*INTERP_POINTS + value, 1));
 
 					line.draw(ARect(source.x, source.y, mposx, mposy));
 				}
-			
 			}
 		}
 		lmposx = mposx;
 		lmposy = mposy;
 	}
+#endif
 }
 void pBuffer::render(float effort, function<void(void)> renderF) {
 
 	bool changed = false;
-	while (effort > 0.0f) {
-		if (pBuffer::currentBuffer == QUEUE_LENGTH) break;
+#ifdef MEASURE_PERFORMANCE
+	glQueryCreator gqt;
+	{
+		glQuery q = gqt.create();
+#endif
 
-		int posxnew = minimum(int(buffer->getSize().w), int(round(posx + (float(QUEUE_LENGTH) * effort * float(buffer->getSize().w)))));
-		if (posxnew == posx) {
-			break;
+		while (effort > 0.0f) {
+			if (pBuffer::currentBuffer == QUEUE_LENGTH) break;
+
+			int posxnew = minimum(int(buffer->getSize().w), int(round(posx + (float(QUEUE_LENGTH) * effort * float(buffer->getSize().w)))));
+			if (posxnew == posx) {
+				break;
+			}
+			ASize ratio(ASize(buffer->getSize() * QUEUE_LENGTH_R) / ASize(size));
+			ARect part(float(posx) / float(buffer->getSize().w), 0.0f, float(posxnew) / float(buffer->getSize().w), 1.0f);
+			ARect partT = part * ASize(ratio.w, ratio.h);
+
+			pBuffer::posx = posxnew;
+
+			ASize delta(((permutationMap[pBuffer::currentBuffer] % QUEUE_LENGTH_R) + 0.5f) / float(QUEUE_LENGTH_R) - 0.5f,
+				((permutationMap[pBuffer::currentBuffer] / QUEUE_LENGTH_R) + 0.5f) / float(QUEUE_LENGTH_R) - 0.5f);
+			delta = delta / ASize(buffer->getSize());
+
+			buffer->writeTo(permutationMap[pBuffer::currentBuffer]);
+			renderF();
+			quad.draw(part, partT + delta);
+			if (posxnew == buffer->getSize().w) {
+				pBuffer::currentBuffer++;
+				changed = true;
+				pBuffer::posx = 0;
+			}
+			effort -= (partT.right - partT.left) / float(QUEUE_LENGTH);
 		}
-		ASize ratio(ASize(buffer->getSize() * QUEUE_LENGTH_R) / ASize(size));
-		ARect part(float(posx) / float(buffer->getSize().w), 0.0f, float(posxnew) / float(buffer->getSize().w), 1.0f);
-		ARect partT = part * ASize(ratio.w, ratio.h);
-
-		pBuffer::posx = posxnew;
-
-		ASize delta(((permutationMap[pBuffer::currentBuffer] % QUEUE_LENGTH_R) + 0.5f) / float(QUEUE_LENGTH_R) - 0.5f,
-			((permutationMap[pBuffer::currentBuffer] / QUEUE_LENGTH_R) + 0.5f) / float(QUEUE_LENGTH_R) - 0.5f);
-		delta = delta / ASize(buffer->getSize());
-
-		changed = true;
-		buffer->writeTo(permutationMap[pBuffer::currentBuffer]);
-		renderF();
-		quad.draw(part, partT + delta);
-		if (posxnew == buffer->getSize().w) {
-			pBuffer::currentBuffer++;
-			pBuffer::posx = 0;
-		}
-		effort -= (partT.right - partT.left) / float(QUEUE_LENGTH);
+#ifdef MEASURE_PERFORMANCE
 	}
-	if (changed) // TODO: Composing is quite time consuming... Maybe it's a good idea to give some option like "compose very 10th frame" or "compose about 3 times per second"
-		pBuffer::compose();
+	if(changed)	cout << "Render: " << gqt.getTime() << " ms   ";
+	{
+		glQuery q = gqt.create();
+#endif
+		// TODO: Improve performance by using Array Textures with Geometry shader (No FBO's!), not using Texel Fetch and composing less! 
+		if (changed) // TODO: Composing is quite time consuming... Maybe it's a good idea to give some option like "compose at most 3 times per second" (HINT: Composing 4k takes between 8 and 60 ms on my Thinkpad T540p, depending on the number of layers and the number of interpolated texels)
+			pBuffer::compose();
+
+#ifdef MEASURE_PERFORMANCE
+	}
+	if (changed) cout << "Compose: " << gqt.getTime() << " ms" << endl;
+#endif
 }
 void pBuffer::compose() {
 
@@ -405,7 +431,7 @@ void pBuffer::compose() {
 		composer->use();
 #ifdef USE_INTERPOLATION
 		glUniform1i(uniform.iteration, maximum(0, int32(pBuffer::currentBuffer) - 1)); //  minimum(24U, pBuffer::currentBuffer));
-		cout << currentBuffer << endl;
+	//	cout << currentBuffer << endl;
 	//	glUniform2f(uniform.iWinSize, 1.0f/size.w, 1.0f/size.h);
 #else
 		glUniform1f(uniform.maxZ, maximum(0, int32(pBuffer::currentBuffer) - 1) / maximum(1.0f, float(QUEUE_LENGTH)));
@@ -428,6 +454,10 @@ void pBuffer::compose() {
 
 }
 
+void pBuffer::discard() {
+	pBuffer::posx = 0;
+	pBuffer::currentBuffer = 0;
+}
 
 /////////////////////////////////////////////////////////////////////////////////////////
 /*****************************[   Progressive Renderer  ]*******************************/
@@ -440,7 +470,8 @@ pRenderer::~pRenderer() {
 
 }
 
-void pRenderer::render(function<void(void)> renderF) {
+void pRenderer::render(function<void(void)> renderF, bool discard) {
+	if(discard)	buffer->discard();
 	buffer->render(pRenderer::effort / pRenderer::maxEffort, renderF);
 }
 
@@ -453,7 +484,7 @@ void pRenderer::setSize(AiSize size, float maxEffort) {
 void pRenderer::setEffort(float effort) {
 	fassert(pRenderer::maxEffort >= effort);
 
-	effort = 20.f / size.h;
+	effort = 1.0f / QUEUE_LENGTH; 
 	
 	pRenderer::effort = effort;
 }

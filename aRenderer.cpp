@@ -42,10 +42,15 @@ aRenderer::~aRenderer() {
 }
 
 
-void aRenderer::render(int x, int y) {
+void aRenderer::render(int x, int y, bool changed) {
+	bool didntUsedProgressive = !useProgressive;
+	useProgressive = !changed;
+
+	// Using the aRender instead of pRender after Changes which will not repeat in the following frames is good, because the aRenderer will present a preview Frame which can be shown while pRender still works on it's first Frame!
+
 	if (aRenderer::useProgressive) {
 		optim->optimize((sRenderer*)pR.data());
-		pR->render(renderF);
+		pR->render(renderF, didntUsedProgressive);
 		glBindFramebuffer(GL_FRAMEBUFFER, 0);
 		glViewport(0, 0, aRenderer::windowSize.w, aRenderer::windowSize.h);
 		texprogram->use();
