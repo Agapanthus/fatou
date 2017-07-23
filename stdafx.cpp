@@ -41,7 +41,7 @@
 int APIENTRY WinMain(HINSTANCE hCurrentInst, HINSTANCE hPreviousInst, LPSTR lpszCmdLine, int nCmdShow) {
 
 #ifdef USE_CONSOLE
-	AConsole cons(200);
+	AConsole cons(2000);
 #endif
 	atexit(_exit);
 	return _main(0, 0);

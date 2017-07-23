@@ -101,7 +101,7 @@ void glqueue::scale(AiSize size, float millisecondsPerFrame) {
 
 /////////////////////////////////////////////////////////////////////////////////////////
 /*****************************[        pRenderer        ]*******************************/
-
+/*
 #define QUEUE_LENGTH 16
 pRenderer::pRenderer(AiSize size, float millisecondsPerFrame, float maxEffort) :
 	queue(size, QUEUE_LENGTH, millisecondsPerFrame),
@@ -172,3 +172,4 @@ void pRenderer::draw() {
 
 	glErrors("pRenderer::draw");
 }
+*/

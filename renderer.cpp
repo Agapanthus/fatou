@@ -51,7 +51,7 @@ void rTile::render(std::function<void(ARect tile)> content, AiSize tileSize, ARe
 	//cout << rTile::effortQ  << " " << size.w << " " << size.h << " | " << vw << " " << vh << endl;
 	glViewport(0, 0, vw, vh);
 	if(content) content(position);
-	rTile::quad.draw(ARect(.0f,.0f,1.f,1.f), position, true);
+	rTile::quad.draw(ARect(.0f,.0f,1.f,1.f), position);
 
 	rTile::useSwap = false;
 
@@ -146,18 +146,18 @@ void rTile::draw(GLuint textureID) {
 	if (rTile::useSwap) {
 		rTile::quad.draw(rTile::position, ARect(0.0f, 0.0f, 
 			(syncBuffer::iSize.w / float(rTile::swapBuffer->getSize().w)  ),
-			(syncBuffer::iSize.h / float(rTile::swapBuffer->getSize().h))) * mul, true);
+			(syncBuffer::iSize.h / float(rTile::swapBuffer->getSize().h))) * mul);
 	}
 	else {
 		if (rTile::getIter() <= 0) {
 			// Needs to correct Size by tileSize/size if one of the tiles is a little bit smaller
 			rTile::quad.draw(rTile::position, ARect(0.0f, 0.0f,
 				rTile::tileSize.w / float(rTile::size.w),
-				rTile::tileSize.h / float(rTile::size.h)) * mul, true);
+				rTile::tileSize.h / float(rTile::size.h)) * mul);
 		}
 		else {
 			// No tilesize-Correction necessary! Texture is already scaled to optimal size!
-			rTile::quad.draw(rTile::position, ARect(0.0f, 0.0f,1.0f, 1.0f) * mul, true);
+			rTile::quad.draw(rTile::position, ARect(0.0f, 0.0f,1.0f, 1.0f) * mul);
 		}
 	}
 }

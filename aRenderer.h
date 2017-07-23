@@ -11,8 +11,9 @@
 #pragma once
 #include "stdafx.h"
 #include "renderer.h"
-#include "parallelctx.h"
-#include "worker.h"
+#include "pRenderer.h"
+//#include "parallelctx.h"
+//#include "worker.h"
 
 
 /////////////////////////////////////////////////////////////////////////////////////////
@@ -22,7 +23,7 @@ class aRenderer : public ANoncopyable {
 public:
 	aRenderer(AiSize size, AiSize tiles, float maxEffort, float targetFramerate, function<void(void)> renderF);
 	~aRenderer();
-	void render();
+	void render(int x, int y, bool changed);
 	void setSize(AiSize size);
 	void setMaxEffort(float effort);
 	void setTargetFramerate(float framerate);
@@ -39,6 +40,7 @@ protected:
 	bool useProgressive;
 
 	pointer<tRenderer> tR;
-	pointer<offscreenctx<worker, workerMsg>> octx;
+	pointer<pRenderer> pR;
+	//pointer<offscreenctx<worker, workerMsg>> octx;
 	function<void(void)> renderF;
 };

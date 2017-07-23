@@ -92,16 +92,14 @@ typedef uint32_t uint32;
 typedef uint64_t uint64;
 #endif
 
-inline float maximum(float a, float b) {
+template<typename T> inline T maximum(T a, T b) {
 	if (a > b) return a;
 	else return b;
 }
-
-inline float minimum(float a, float b) {
+template<typename T> inline T minimum(T a, T b) {
 	if (a < b) return a;
 	else return b;
 }
-
 
 /////////////////////////////////////////////////////////////////////////////////////////
 /*****************************[     Error Handling       ]******************************/
@@ -164,7 +162,14 @@ inline int32 _fatalNote(std::string msg) {
 struct AiSize {
 	AiSize(int32 w, int32 h) : w(w), h(h) {}
 	AiSize() : w(0), h(0) {}
-	int32 w, h;
+	union { 
+		int32 w; 
+		int32 x; 
+	};
+	union {
+		int32 h; 
+		int32 y;
+	};
 
 	inline bool operator==(const AiSize& compare) const {
 		return ((w == compare.w) && (h == compare.h));
@@ -191,13 +196,39 @@ struct AiSize {
 	inline AiSize operator-(const int sum) const {
 		return AiSize(AiSize::w - sum, AiSize::h - sum);
 	}
+
+	inline AiSize operator-(const AiSize b) const {
+		return AiSize(AiSize::w - b.w, AiSize::h - b.h);
+	}
+	inline AiSize operator+(const AiSize b) const {
+		return AiSize(AiSize::w + b.w, AiSize::h + b.h);
+	}
+	inline AiSize operator/(const AiSize b) const {
+		return AiSize(AiSize::w / b.w, AiSize::h / b.h);
+	}
+	inline AiSize operator*(const AiSize b) const {
+		return AiSize(AiSize::w * b.w, AiSize::h * b.h);
+	}
+
+	inline float magnitude() {
+		return sqrtf(float(AiSize::w*AiSize::w + AiSize::h*AiSize::h));
+	}
 };
 
+typedef AiSize AiPoint;
+
 struct ASize {
+	explicit ASize(AiSize in) : w(float(in.w)), h(float(in.h)) {}
 	ASize(float w, float h) : w(w), h(h) {}
 	ASize() : w(0.0f), h(0.0f) {}
-	float w, h;
-
+	union {
+		float x;
+		float w;
+	};
+	union {
+		float y;
+		float h;
+	};
 	inline bool operator==(const ASize& compare) const {
 		return ((w == compare.w) && (h == compare.h));
 	}
@@ -210,7 +241,21 @@ struct ASize {
 	inline bool operator>(const ASize& compare) const {
 		return ((w > compare.w) && (h > compare.h));
 	}
+	
+	inline ASize operator/(const ASize &div) const {
+		return ASize(ASize::w / div.w, ASize::h / div.h);
+	}
+	inline ASize operator+(const ASize &div) const {
+		return ASize(ASize::w + div.w, ASize::h + div.h);
+	}
+	inline ASize operator*(const ASize &div) const {
+		return ASize(ASize::w * div.w, ASize::h * div.h);
+	}
+	inline ASize operator-(const ASize &div) const {
+		return ASize(ASize::w - div.w, ASize::h - div.h);
+	}
 };
+typedef ASize APoint;
 
 struct ARect {
 	ARect() : left(.0f), top(.0f), right(.0f), bottom(.0f) {}
@@ -236,6 +281,18 @@ struct ARect {
 
 	inline ARect operator+(const ARect& sum) const {
 		return ARect(ARect::left + sum.left, ARect::top + sum.top, ARect::right + sum.right, ARect::bottom + sum.bottom);
+	}
+	inline ARect operator+(const ASize &sum) const {
+		return ARect(ARect::left + sum.w, ARect::top + sum.h, ARect::right + sum.w, ARect::bottom + sum.h);
+	}
+	inline ARect operator/(const ASize &sum) const {
+		return ARect(ARect::left / sum.w, ARect::top / sum.h, ARect::right / sum.w, ARect::bottom / sum.h);
+	}
+	inline ARect operator*(const ASize &sum) const {
+		return ARect(ARect::left * sum.w, ARect::top * sum.h, ARect::right * sum.w, ARect::bottom * sum.h);
+	}
+	inline ARect operator-(const ASize &sum) const {
+		return ARect(ARect::left - sum.w, ARect::top - sum.h, ARect::right - sum.w, ARect::bottom - sum.h);
 	}
 };
 
@@ -335,6 +392,9 @@ public:
 	const T *data() const {
 		return c;
 	}
+	bool empty() const {
+		return c == nullptr;
+	}
 private:
 	T *c;
 };
@@ -385,6 +445,9 @@ inline string toUTF8(const string32 &str) {
 
 template<typename T> string toString(T t) {
 	return std::to_string(t);
+}
+inline string toString(ASize size) {
+	return string("(") + toString(size.w) + ", " + toString(size.h) + ")";
 }
 inline string toString(AiSize size) {
 	return string("(") + toString(size.w) + ", " + toString(size.h) + ")";

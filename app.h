@@ -74,7 +74,8 @@ private:
 	GLint maxTextureSize;
 	bool isFullscreen;
 	function<void(void)> renderF;
-
+	bool Change; // Parameters changed
+	bool pChange; // Position / Zoom changed
 
 	///////////////////// Interaction
 

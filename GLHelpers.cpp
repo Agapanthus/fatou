@@ -180,8 +180,7 @@ texture::~texture() {
 	glDeleteTextures(1, &(texture::tex));
 }
 void texture::use(GLuint textureID) {
-	if(textureID != UINT32_MAX)
-		glActiveTexture(textureID);
+	glActiveTexture(textureID);
 	glBindTexture(GL_TEXTURE_2D, texture::tex);
 }
 
@@ -228,58 +227,75 @@ void vao::draw() {
 /////////////////////////////////////////////////////////////////////////////////////////
 /*****************************[          sQuad          ]*******************************/
 
-sQuad::sQuad() : vao(sQuad::quadVertices, sizeof(sQuad::quadVertices), 6, true) {
-	sQuad::quadVertices[2] = 0.0f;
-	sQuad::quadVertices[3] = 1.0f;
-	sQuad::quadVertices[6] = 0.0f;
-	sQuad::quadVertices[7] = 0.0f;
-	sQuad::quadVertices[10] = 1.0f;
-	sQuad::quadVertices[11] = 0.0f;
+static float quadVertices_t[24];
+sQuad::sQuad() : vao(quadVertices_t, sizeof(quadVertices_t), 6, true) {
 
-	sQuad::quadVertices[14] = 0.0f;
-	sQuad::quadVertices[15] = 1.0f;
-	sQuad::quadVertices[18] = 1.0f;
-	sQuad::quadVertices[19] = 0.0f;
-	sQuad::quadVertices[22] = 1.0f;
-	sQuad::quadVertices[23] = 1.0f;
 }
-void sQuad::draw(ARect pos, ARect post, bool transTexCoord) {
-	//ARect pos(posi.left * 2 - 1, posi.top * 2 - 1, posi.right * 2 - 1, posi.bottom * 2 - 1);
+void sQuad::draw(ARect pos, ARect post) {
 	pos = pos * 2 - 1;
-	sQuad::quadVertices[0] = pos.left;
-	sQuad::quadVertices[1] = pos.bottom;
-	sQuad::quadVertices[4] = pos.left;
-	sQuad::quadVertices[5] = pos.top;
-	sQuad::quadVertices[8] = pos.right;
-	sQuad::quadVertices[9] = pos.top;
+	float quadVertices[24];
+	quadVertices[0] = pos.left;
+	quadVertices[1] = pos.bottom;
+	quadVertices[4] = pos.left;
+	quadVertices[5] = pos.top;
+	quadVertices[8] = pos.right;
+	quadVertices[9] = pos.top;
 
-	sQuad::quadVertices[12] = pos.left;
-	sQuad::quadVertices[13] = pos.bottom;
-	sQuad::quadVertices[16] = pos.right;
-	sQuad::quadVertices[17] = pos.top;
-	sQuad::quadVertices[20] = pos.right;
-	sQuad::quadVertices[21] = pos.bottom;
+	quadVertices[12] = pos.left;
+	quadVertices[13] = pos.bottom;
+	quadVertices[16] = pos.right;
+	quadVertices[17] = pos.top;
+	quadVertices[20] = pos.right;
+	quadVertices[21] = pos.bottom;
 
-	if (transTexCoord) {
-		sQuad::quadVertices[2] = post.left;
-		sQuad::quadVertices[3] = post.bottom;
-		sQuad::quadVertices[6] = post.left;
-		sQuad::quadVertices[7] = post.top;
-		sQuad::quadVertices[10] = post.right;
-		sQuad::quadVertices[11] = post.top;
+	quadVertices[2] = post.left;
+	quadVertices[3] = post.bottom;
+	quadVertices[6] = post.left;
+	quadVertices[7] = post.top;
+	quadVertices[10] = post.right;
+	quadVertices[11] = post.top;
 
-		sQuad::quadVertices[14] = post.left;
-		sQuad::quadVertices[15] = post.bottom;
-		sQuad::quadVertices[18] = post.right;
-		sQuad::quadVertices[19] = post.top;
-		sQuad::quadVertices[22] = post.right;
-		sQuad::quadVertices[23] = post.bottom;
-	}
-	vao::update(sQuad::quadVertices, sizeof(sQuad::quadVertices), 6);
+	quadVertices[14] = post.left;
+	quadVertices[15] = post.bottom;
+	quadVertices[18] = post.right;
+	quadVertices[19] = post.top;
+	quadVertices[22] = post.right;
+	quadVertices[23] = post.bottom;
+	
+	vao::update(quadVertices, sizeof(quadVertices), 6);
 	vao::draw();
 }
 sQuad::~sQuad() {
 }
+
+
+/////////////////////////////////////////////////////////////////////////////////////////
+/*****************************[         glLine          ]*******************************/
+
+glLine::glLine() : vao(quadVertices_t, sizeof(quadVertices_t), 6, true) {
+}
+void glLine::draw(ARect pos) {
+	pos = pos * 2 - 1;
+	
+	float lineVertices[8];
+	lineVertices[0] = pos.left;
+	lineVertices[1] = pos.top;
+	lineVertices[4] = pos.right;
+	lineVertices[5] = pos.bottom;
+	vao::update(lineVertices, sizeof(lineVertices), 1);
+
+	glBindVertexArray(vao::vaodata);
+	glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+	glDrawArrays(GL_LINES, 0, 2);
+	glBindVertexArray(0);
+	glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+
+	glErrors("glline::draw");
+}
+glLine::~glLine() {
+
+}
+
 
 /////////////////////////////////////////////////////////////////////////////////////////
 /*****************************[       Sync buffer       ]*******************************/
@@ -310,7 +326,7 @@ syncBuffer::syncBuffer(AiSize iSize, bool useMipmap, GLuint quality, GLuint qual
 void syncBuffer::scale(AiSize iSize, bool useMipmap) {
 	syncBuffer::iSize = iSize;
 
-	glBindFramebuffer(GL_FRAMEBUFFER, syncBuffer::framebuffer);
+//	glBindFramebuffer(GL_FRAMEBUFFER, syncBuffer::framebuffer);
 
 	glBindTexture(GL_TEXTURE_2D, syncBuffer::tex);
 	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, syncBuffer::iSize.w, syncBuffer::iSize.h, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
@@ -322,10 +338,10 @@ void syncBuffer::scale(AiSize iSize, bool useMipmap) {
 	//glBindRenderbuffer(GL_RENDERBUFFER, syncBuffer::rbo);
 	//glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, syncBuffer::iSize.w, syncBuffer::iSize.h);
 	//glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, syncBuffer::rbo);
-	if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
-		fatalNote("Framebuffer is not complete!");
+//	if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
+//		fatalNote("Framebuffer is not complete!");
 
-	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+//	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 syncBuffer::~syncBuffer() {
 	glDeleteTextures(1, &(syncBuffer::tex));
@@ -343,8 +359,7 @@ void syncBuffer::writeTo(std::function<void(void)> content) {
 	}
 }
 void syncBuffer::readFrom(GLuint textureID) {
-	if (textureID != UINT32_MAX)
-		glActiveTexture(textureID);
+	glActiveTexture(textureID);
 	glBindTexture(GL_TEXTURE_2D, syncBuffer::tex);
 }
 void syncBuffer::framebufferRead() {
@@ -355,4 +370,99 @@ void syncBuffer::framebufferWrite() {
 }
 AiSize syncBuffer::getSize() {
 	return syncBuffer::iSize;
+}
+/*void syncBuffer::upload(AiSize size, const float *data) {
+	syncBuffer::iSize = size;
+	glBindTexture(GL_TEXTURE_2D, syncBuffer::tex);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, syncBuffer::iSize.w, syncBuffer::iSize.h, 0, GL_RGBA, GL_FLOAT, data);
+	if (syncBuffer::useMipmap) {
+		glGenerateMipmap(GL_TEXTURE_2D);
+	}
+}*/
+
+/////////////////////////////////////////////////////////////////////////////////////////
+/*****************************[      float storage      ]*******************************/
+
+floatStorage::floatStorage(AiSize iSize) : iSize(iSize) {
+	glGenTextures(1, &(floatStorage::tex));
+	glBindTexture(GL_TEXTURE_2D, floatStorage::tex);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	floatStorage::data.resize(iSize.w * iSize.h * 4);
+}
+floatStorage::~floatStorage() {
+	glDeleteTextures(1, &(floatStorage::tex));
+}
+void floatStorage::upload() {
+	glBindTexture(GL_TEXTURE_2D, floatStorage::tex);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, floatStorage::iSize.w, floatStorage::iSize.h, 0, GL_RGBA, GL_FLOAT, floatStorage::data.data());
+}
+void floatStorage::scale(AiSize iSize) {
+	floatStorage::iSize = iSize;
+	floatStorage::data.resize(iSize.w * iSize.h * 4);
+}
+void floatStorage::bind(GLuint textureID) {
+	glActiveTexture(textureID);
+	glBindTexture(GL_TEXTURE_2D, floatStorage::tex);
+}
+AiSize floatStorage::getSize() {
+	return floatStorage::iSize;
+}
+
+/////////////////////////////////////////////////////////////////////////////////////////
+/*****************************[  Volumetric Sync buffer ]*******************************/
+
+syncBuffer3d::syncBuffer3d(AiSize iSize, uint32 depth, GLuint quality, GLuint qualityM) :
+	iSize(iSize), depth(depth), quality(quality) {
+	syncBuffer3d::framebuffers = new GLuint[syncBuffer3d::depth];
+	glGenFramebuffers(depth, framebuffers);
+//	glBindFramebuffer(GL_FRAMEBUFFER, framebuffers);
+
+	glGenTextures(1, &(syncBuffer3d::tex));
+	glBindTexture(GL_TEXTURE_3D, syncBuffer3d::tex);
+	glTexImage3D(GL_TEXTURE_3D, 0, GL_RGB, syncBuffer3d::iSize.w, syncBuffer3d::iSize.h, syncBuffer3d::depth, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
+	glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, qualityM);
+	glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, quality);
+
+	for (size_t i = 0; i < depth; i++) {
+		glBindFramebuffer(GL_FRAMEBUFFER, framebuffers[i]);
+	//	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, syncBuffer::tex, 0);
+		glFramebufferTextureLayer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, syncBuffer3d::tex, 0, i);
+		if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
+			fatalNote("Framebuffer is not complete!");
+	}
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+	glErrors("syncBuffer3d::construct");
+}
+void syncBuffer3d::scale(AiSize iSize) {
+	syncBuffer3d::iSize = iSize;
+
+	glBindTexture(GL_TEXTURE_3D, syncBuffer3d::tex);
+	glTexImage3D(GL_TEXTURE_3D, 0, GL_RGB, syncBuffer3d::iSize.w, syncBuffer3d::iSize.h, syncBuffer3d::depth, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
+
+	glErrors("syncBuffer3d::scale");
+}
+syncBuffer3d::~syncBuffer3d() {
+	glDeleteTextures(1, &(syncBuffer3d::tex));
+	glDeleteFramebuffers(syncBuffer3d::depth, syncBuffer3d::framebuffers);
+	delete[] syncBuffer3d::framebuffers;
+	glErrors("syncBuffer3d::destruct");
+}
+void syncBuffer3d::writeTo(uint32 layer) {
+	glBindFramebuffer(GL_FRAMEBUFFER, syncBuffer3d::framebuffers[layer]);
+	glViewport(0, 0, syncBuffer3d::iSize.w, syncBuffer3d::iSize.h);
+	glErrors("syncBuffer3d::writeTo");
+}
+void syncBuffer3d::bind(GLuint textureID) {
+	glActiveTexture(textureID);
+	glBindTexture(GL_TEXTURE_3D, syncBuffer3d::tex);
+	glErrors("syncBuffer3d::bind");
+}
+AiSize syncBuffer3d::getSize() {
+	return syncBuffer3d::iSize;
 }

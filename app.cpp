@@ -40,14 +40,20 @@ app::app(GLFWwindow *window, nk_context* ctx) :
 
 	glErrors("app::before");
 	for (size_t p = 0; p < MAX_POLY; p++) coe[p] = coet[p] = 0.0f;
+	
 	coet[0] = -1.0f;
 	coet[1] = -1.0f;
 	coet[4] = 20.0f;
 	coet[7] = 100.0f;
-	coet[205] = 100.0f;
-	coet[75] = 100.0f;
-	//coet[44] = 20.0f;
-		
+	coet[44] = 20.0f;
+	
+	/*
+	coet[0] = -1.0f;
+	coet[7] = 100.0f;
+	coet[977] = 100.0f;
+	coet[1] = -1.0f;
+	*/
+
 	app::program.reset(new shader(mainVertexShader, mainFragmentShader));
 	app::uniform.screenTexture = app::program->getUniform("screenTexture");
 	app::uniform.c = app::program->getUniform("c");
@@ -82,8 +88,8 @@ app::app(GLFWwindow *window, nk_context* ctx) :
 	//app::octx.reset(new offscreenctx<worker, workerMsg>(new worker()));
 
 	app::renderF = [this](void) -> void {
-		glClear(GL_COLOR_BUFFER_BIT);
-		glClearColor(0.0f, 0.0f, 1.0f, 1.0f);
+		//glClear(GL_COLOR_BUFFER_BIT);
+		//glClearColor(0.0f, 0.0f, 1.0f, 1.0f);
 
 		app::program->use();
 
@@ -157,7 +163,8 @@ void app::setFullscreen(bool fullscreen) {
 }
 
 void app::logic() {
-	bool Change = false;
+	app::Change = false;
+	app::pChange = false;
 
 	unsigned int now = gtimeGet();
 	unsigned int timeElapsed = now - app::lastTime;
@@ -237,15 +244,24 @@ void app::logic() {
 		if (nk_tree_push(ctx, NK_TREE_TAB, "Renderer", NK_MAXIMIZED)) {
 
 			nk_layout_row_dynamic(ctx, 25, 1);
-			nk_property_int(ctx, "Iterations:", 1, &(app::iter), 1000, 10, app::iter * 0.001f + 0.03f);
+			int iter = app::iter;
+			nk_property_int(ctx, "Iterations:", 1, &(iter), 1000, 10, iter * 0.001f + 0.03f);
+			if (iter != app::iter) {
+				Change = true;
+				app::iter = iter;
+			}
 
 			nk_layout_row_dynamic(ctx, 25, 1);
 			TOOLTIP("Magnitudes below 2^bias are assumed to have converged. Too small values cause floating point errors! Use double precision for better quality!");
 			nk_property_int(ctx, "Bias:", -50, &biasPower, 10, 1, 0.1f);
-			app::cx = pow(2.0f, float(biasPower));
+			if (app::cx != pow(2.0f, float(biasPower))) {
+				Change = true;
+				app::cx = pow(2.0f, float(biasPower));
+			}
 
 			nk_layout_row_dynamic(ctx, 25, 1);
-			nk_property_int(ctx, "Anim. speed:", -50, &biasPower, 10, 1, 0.1f);
+			int dummy = 0;
+			nk_property_int(ctx, "Anim. speed:", -50, &dummy, 10, 1, 0.1f);
 			// TODO: 
 
 			nk_layout_row_begin(ctx, NK_DYNAMIC, 25, 2);
@@ -256,15 +272,13 @@ void app::logic() {
 			app::maxDensity = nk_combo(ctx, densitySelect, sizeof(densitySelect)/sizeof(densitySelect[0]), app::maxDensity, 25, nk_vec2(80, 110));
 			nk_layout_row_end(ctx);
 			if (app::maxDensityI != densityTable[app::maxDensity]) {
+				Change = true;
 				app::maxDensityI = densityTable[app::maxDensity];
-				//app::renderer->setSize(AiSize(app::width, app::height), app::tiles, app::maxDensityI);
-				//app::optim->setMaxEffort(app::maxDensityI);
 				app::renderer->setMaxEffort(app::maxDensityI);
 			}
 
 			nk_layout_row_dynamic(ctx, 25, 1);
 			nk_property_int(ctx, "Min. framerate:", 5, &(app::targetFRate), int(MaxFRate * 0.9f), 10, 0.1f);
-			//app::optim->setTargetFramerate(float(app::targetFRate));
 			app::renderer->setTargetFramerate(float(app::targetFRate));
 
 			nk_layout_row_dynamic(ctx, 20, 2);
@@ -439,10 +453,16 @@ void app::logic() {
 		else show_about = false;
 	}
 
-
+	bool nuklearHandledEvents = true;
 	if (0 == nk_item_is_any_active(ctx) && 0 == nk_window_is_any_hovered(ctx)) {
-
+		nuklearHandledEvents = false;
 		setStyle(app::ctx, true);
+
+	}
+	else {
+		setStyle(app::ctx, false);
+	}
+
 
 		///////////////////// Navigate
 
@@ -457,8 +477,8 @@ void app::logic() {
 		
 			// TODO: Only move, if this button-hold was induced by a button click outside any nuklear-widgets!
 
-			bool left = glfwGetMouseButton(app::window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS;
-			bool right = glfwGetMouseButton(app::window, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS;
+			bool left = nuklearHandledEvents ? false : glfwGetMouseButton(app::window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS;
+			bool right = nuklearHandledEvents ? false : glfwGetMouseButton(app::window, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS;
 			
 			static const float zoomSpeed = 0.0005f; // 2000.0f;
 			static const float moveSpeed = 0.03f; // 30.0f;
@@ -471,7 +491,7 @@ void app::logic() {
 				app::zoom *= timeElapsed * zoomSpeed + 1.0f;
 				//app::zoomy *= timeElapsed * zoomSpeed + 1.0f;
 			}
-			float aspect = float(app::width) / float(app::height);
+			//float aspect = float(app::width) / float(app::height);
 			app::zoomx = app::zoom * (app::width/1000.0f);
 			app::zoomy = app::zoom * (app::height/1000.0f);
 
@@ -480,16 +500,11 @@ void app::logic() {
 				glfwGetCursorPos(app::window, &xpos, &ypos);
 				app::posx += (float(xpos) / float(app::width) - 0.5f) * app::zoomx * moveSpeed;
 				app::posy -= (float(ypos) / float(app::height) - 0.5f) * app::zoomy * moveSpeed;
-
+				app::pChange = true;
 			}
 
 			break;
 		}
-
-	}
-	else {
-		setStyle(app::ctx, false);
-	}
 
 
 	///////////////////// Animate Polynomials
@@ -500,7 +515,7 @@ void app::logic() {
 			else {
 				float blendTim = tanh(0.01f * timeElapsed / (animSpeed / 1000.0f));
 				coe[p] = coe[p] * (1.0f - blendTim) + coet[p] * blendTim;
-				Change = true;
+				app::Change = true;
 			}
 		}
 	}
@@ -544,8 +559,11 @@ void app::display() {
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 	glViewport(0, 0, app::width, app::height);
 
-	app::renderer->render();
-
+	{
+		double xpos, ypos;
+		glfwGetCursorPos(app::window, &xpos, &ypos);
+		app::renderer->render(int(xpos), int(ypos), app::Change || app::pChange);
+	}
 	/*
 	app::texprogram->use();
 	app::progrenderer->draw();
