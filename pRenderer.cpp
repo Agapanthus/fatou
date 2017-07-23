@@ -15,7 +15,7 @@
 #define USE_INTERPOLATION
 #define INTERP_POINTS 4
 
-//#define MEASURE_PERFORMANCE
+#define MEASURE_PERFORMANCE
 
 // TODO: Check GL / GLSL-Version and support of used functions in the beginning of the program!
 
