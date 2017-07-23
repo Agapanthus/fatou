@@ -20,16 +20,12 @@ void glErrors(const char* wheres) {
 		fatalNote(string("OpenGL-Error@") + string(wheres) + ": " + std::to_string((int32)err)); //TODO:  +" " + string((const char*)gluErrorString(err)));
 	}
 }
-#ifdef OS_WIN
+
 uint32 gtimeGet() {
-	//return clock();
 	GLint64 timer;
 	glGetInteger64v(GL_TIMESTAMP, &timer);
 	return uint32( timer / 1000000 );
 }
-#else
-#error IMPL
-#endif
 
 /*
 int getGPURAM() {
@@ -69,7 +65,7 @@ void debugShader(GLuint res) {
 
 	free(logs);
 
-	throw exception("Failed to compile shader");
+	throw runtime_error("Failed to compile shader");
 }
 
 shader::shader(const string &vertexShader, const string &fragmentShader) {
@@ -78,12 +74,12 @@ shader::shader(const string &vertexShader, const string &fragmentShader) {
 	
 	GLuint vshader = shader::upload(vertexShader, GL_VERTEX_SHADER);
 	if (!vshader)
-		throw exception("Failed to load vertex shader");
+		throw runtime_error("Failed to load vertex shader");
 	glAttachShader(shader::program, vshader);
 	
 	GLuint fshader = shader::upload(fragmentShader, GL_FRAGMENT_SHADER);
 	if (!fshader)
-		throw exception("Failed to load fragment shader");
+		throw runtime_error("Failed to load fragment shader");
 	glAttachShader(shader::program, fshader);
 
 	glLinkProgram(shader::program);

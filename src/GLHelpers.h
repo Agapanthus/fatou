@@ -165,7 +165,7 @@ public:
 		glQuery::query = query;
 		move.alive = false;
 	}
-	glQuery & glQuery::operator=(glQuery &&move) {
+	glQuery & operator=(glQuery &&move) {
 		if (this != &move) {
 			alive = true;
 			query = move.query;

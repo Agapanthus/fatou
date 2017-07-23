@@ -105,7 +105,7 @@ template<typename T> inline T minimum(T a, T b) {
 /*****************************[     Error Handling       ]******************************/
 
 #include <exception>
-using std::exception;
+using std::runtime_error;
 
 typedef std::bad_alloc AAllocException;
 
@@ -121,22 +121,24 @@ typedef std::bad_alloc AAllocException;
 
 #ifdef OS_WIN
 inline int32 _fatalNote(std::string msg) {
-	switch (MessageBoxA(nullptr, (std::string("Fatal Error: ") + msg).c_str(), "Fatou::Error",  MB_ICONERROR | MB_SYSTEMMODAL)) {
-	case IDIGNORE:
+	//switch (
+	MessageBoxA(nullptr, (std::string("Fatal Error: ") + msg).c_str(), "Fatou::Error", MB_ICONERROR | MB_SYSTEMMODAL); //) {
+	/*case IDIGNORE:
 		return 0;
 	case IDRETRY:
 		return 1;
-	default:
+	default:*/
 		exit(-1);
 		return -1;
-	}
+	//}
 }
 #elif defined(OS_LIN)
 
 #include <unistd.h>
+#include <iostream>
 
 inline int32 _fatalNote(std::string msg) {
-	std::cout << msg << std::endl;
+	std::cout << "FATAL ERROR: " << msg << std::endl;
 
 	pid_t my_pid;
 	int status, timeout /* unused ifdef WAIT_FOR_COMPLETION */;
@@ -146,18 +148,37 @@ inline int32 _fatalNote(std::string msg) {
 			return -1;
 		}
 	}
-	sleep(5); // Damit man den Dialog sieht!
+        exit(-1);
 	return 0;
 }
 #else
 #error IMPL
 #endif
 
+#include <string>
+#include <sstream>
+using std::ostringstream;
+
+class StreamFormatter {
+public:
+	operator std::string() const {
+		return this->stream.str();
+	}
+	template<typename T> StreamFormatter& operator << (const T& value) {
+		this->stream << value;
+		return *this;
+	}
+private:
+	std::ostringstream stream;
+};
+
 #define fatalNote(TEXT) _fatalNote(StreamFormatter() << TEXT)
 
 
 /////////////////////////////////////////////////////////////////////////////////////////
 /*****************************[        Geometry          ]******************************/
+
+#include <math.h>
 
 struct AiSize {
 	AiSize(int32 w, int32 h) : w(w), h(h) {}
@@ -406,7 +427,6 @@ private:
 
 #include <string>
 #include <utf8.h>
-#include <sstream>
 #include <iomanip>
 
 using std::string;
@@ -501,20 +521,6 @@ inline string16 toString16(string in) {
 	return toUTF16(in);
 }
 
-
-
-class StreamFormatter {
-public:
-	operator std::string() const {
-		return stream.str();
-	}
-	template<typename T> StreamFormatter& operator << (const T& value) {
-		stream << value;
-		return *this;
-	}
-private:
-	std::ostringstream stream;
-};
 
 
 /////////////////////////////////////////////////////////////////////////////////////////
@@ -638,6 +644,7 @@ private:
 /*****************************[           QPC            ]******************************/
 
 class QPC {
+#ifdef OS_WIN
 public:
 	QPC() {
 		LARGE_INTEGER li;
@@ -649,6 +656,7 @@ public:
 
 		QueryPerformanceCounter(&li);
 		QPC::CounterStart = li.QuadPart;
+
 	}
 	double get() {
 		LARGE_INTEGER li;
@@ -657,7 +665,7 @@ public:
 		QPC::CounterStart = li.QuadPart;
 		return dif;
 	}
-	void sleep(int millis) {
+	void sleep(int32 millis) {
 		Sleep(millis);
 	}
 	~QPC() {
@@ -666,4 +674,33 @@ public:
 private:
 	double PCFreq = 0.0;
 	int64 CounterStart = 0;
+#elif defined(OS_LIN)
+public:
+	QPC() {
+		clock_gettime(CLOCK_REALTIME, &CounterStart);
+	}
+	double get() {
+		struct timespec tv;
+		clock_gettime(CLOCK_REALTIME, &tv);
+		double dif = (tv.tv_nsec - CounterStart.tv_nsec) / 1000000.0 + (tv.tv_sec - CounterStart.tv_sec) * 1000.0;
+		CounterStart = tv;
+		return dif;
+	}
+	void sleep(int32 millis) {
+		cout << millis << endl;
+		struct timespec ts;
+		ts.tv_sec = millis / 1000;
+		ts.tv_nsec = (millis % 1000) * 1000000;
+		nanosleep(&ts, NULL);
+	}
+	~QPC() {
+
+	}
+private:
+	struct timespec CounterStart;
+
+    
+#else
+#error IMPL
+#endif
 };

@@ -4,8 +4,32 @@
 
 Simple viewer for convergence conduct of polynomials solved using Newton's method
 
-# Build
+## Build
 
-Simply use CMake.
-You can build both 32 bit and 64 bit for MSVC.
+For Linux use:
+
+```bash
+sudo apt-get install xorg-dev libglu1-mesa-dev zenity
+mkdir fatou
+cd fatou
+git clone git://github.com/Agapanthus/fatou.git ./
+git submodule init
+git submodule update
+cmake ./
+make
+cd bin
+./fatou
+```
+
+For Windows use:
+
+
+```bash
+git clone git://github.com/Agapanthus/fatou.git ./
+git submodule init
+git submodule update
+cmake ./
+```
+...and compile with MSVC.
+
 When using MSVC, use "MinSizeRelease" for a faster Release build. "Release" usually takes much longer (because of the /GL compiler option)!

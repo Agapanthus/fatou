@@ -8,7 +8,6 @@
 *
 */
 
-#pragma once
 #include "stdafx.h"
 #include "aRenderer.h"
 #include "data.h"

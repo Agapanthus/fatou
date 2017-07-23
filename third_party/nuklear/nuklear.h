@@ -240,6 +240,8 @@ publish and distribute this file as you see fit.
 #ifndef NK_NUKLEAR_H_
 #define NK_NUKLEAR_H_
 
+#include "../../src/stdafx.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif

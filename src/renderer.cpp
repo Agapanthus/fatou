@@ -222,13 +222,16 @@ void fOptimizer::optimize(sRenderer *renderer) {
 			//cout << fOptimizer::aEffort << endl;
 
 		}
+		
+		// TODO: uncomment the condition! Therefore, fOptimizer needs to be improved!
 
 		// Sleep if Framerate is highter than 60FPS
-		if ((optimTime - lastTime > 1.0) && (fOptimizer::aEffort == fOptimizer::maxEffort)) {
+		if ((optimTime - lastTime > 1.0)/* && (fOptimizer::aEffort == fOptimizer::maxEffort)*/) {
 			int sleepTime = int(floor(optimTime - lastTime));
 			if (sleepTime > (17 - int(ceil(fOptimizer::floatingTime)) + fOptimizer::lastSleep)) 
 				sleepTime = 17 - int(ceil(fOptimizer::floatingTime)) + fOptimizer::lastSleep;
 			if (sleepTime < 0) sleepTime = 0;
+			cout << sleepTime << endl;
 			if(sleepTime > 0) QPC::sleep(sleepTime);
 			fOptimizer::lastSleep = sleepTime;
 		}

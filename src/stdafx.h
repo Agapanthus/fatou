@@ -33,13 +33,17 @@ using std::function;
 #include <thread>
 using std::thread;
 
+// To get shuffle
+#include <algorithm>
+
+// To get memset
+#include <cstring>
+
 #include <queue>
 #include <mutex>
 #include <condition_variable>
 
 // OpenGL
-//#define GLEW_STATIC
-//#include <GL/glew.h>
 #include <glbinding/gl/gl.h>
 #include <glbinding/Binding.h>
 using namespace gl;
@@ -61,6 +65,10 @@ using namespace gl;
 #ifdef OS_WIN
 #include <shellapi.h>
 #endif
+#ifdef OS_LIN
+#define fopen_s(pFile,filename,mode) ((*(pFile))=fopen((filename),  (mode)))==NULL
+#endif
+
 
 /////////////////////////////////////////////////////////////////////////////////////////
 /*****************************[       Entry Point         ]*****************************/

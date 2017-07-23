@@ -230,7 +230,7 @@ void pBuffer::recalculateCoeff() {
 	for (int l = 0; l < QUEUE_LENGTH; l++) { 
 		permutationMap[l] = QUEUE_LENGTH-1- l;
 	}
-	random_shuffle(std::begin(permutationMap), std::end(permutationMap));
+	std::random_shuffle(std::begin(permutationMap), std::end(permutationMap));
 
 	for (int32 i = 0; i < QUEUE_LENGTH; i++) { // Iterations
 		for (int32 l = 0; l < QUEUE_LENGTH; l++) { // Layers

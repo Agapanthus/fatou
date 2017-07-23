@@ -217,9 +217,12 @@ void app::logic() {
 			app::setFullscreen(false);
 #ifdef OS_WIN
 			ShellExecute(NULL, "open", "help\\index.html", NULL, NULL, SW_SHOW);
+#elif defined(OS_LIN)
+			// TODO: Where will this work properly? Where won't?
+			system("see ./help/index.html");
+			// system("helpfile.html"); firefox, xdg-open, /usr/bin/x-www-browser
 #else
 			#error IMPL
-			// system("helpfile.html"); firefox, xdg-open, /usr/bin/x-www-browser
 #endif
 		}
 
