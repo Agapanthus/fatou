@@ -1,0 +1,9 @@
+[submodule "third_party/glbinding"]
+	path = third_party/glbinding
+	url = git://github.com/cginternals/glbinding.git
+[submodule "third_party/glfw"]
+	path = third_party/glfw
+	url = git://github.com/glfw/glfw.git
+[submodule "third_party/utfcpp"]
+	path = third_party/utfcpp
+	url = git://github.com/nemtrif/utfcpp.git

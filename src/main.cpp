@@ -24,7 +24,7 @@ int _main(int argc, char **argv) {
 		glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
 		glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
 		glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-		glfwWindowHint(GLFW_DOUBLEBUFFER, doubleBuffered ? GL_TRUE : GL_FALSE);
+		glfwWindowHint(GLFW_DOUBLEBUFFER, doubleBuffered ? true : false);
 #ifdef __APPLE__
 		glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE); // uncomment this statement to fix compilation on OS X
 #endif
@@ -40,7 +40,8 @@ int _main(int argc, char **argv) {
 				APP->keypressed(key);  
 		});
 
-		GLenum glew_status = glewInit();
+	/*
+	GLenum glew_status = glewInit();
 		if (glew_status != GLEW_OK) {
 			fatalNote(string("Error: ") + string((const char*)glewGetErrorString(glew_status)));
 		}
@@ -48,7 +49,10 @@ int _main(int argc, char **argv) {
 			fatalNote("Error: your graphic card does not support OpenGL 2.0\n");
 		}
 		glErrors("glfw::init");
+		*/
 
+		glbinding::Binding::initialize(false); // only resolve functions that are actually used (lazy)
+		// TODO: Error Checking! Version Checking!
 
 		///////////////////////////////////
 

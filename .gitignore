@@ -1,5 +1,16 @@
 *.vcxproj
 *.filters
 *.user
+*.sln
+*.pch
+*.opendb
+*.db
+*.cmake
 Debug
 Release
+bin
+fatou.dir
+ipch
+Win32
+CMakeCache.txt
+CMakeFiles

@@ -10,6 +10,7 @@
 
 #include "stdafx.h"
 
+/*
 // Libraries
 #ifdef OS_WIN
 	#pragma comment(lib , "../../third_party/glew-2.0.0/lib/Release/Win32/glew32s.lib")
@@ -25,12 +26,13 @@
 	#endif
 
 #endif
+*/
 
 
 #define NK_IMPLEMENTATION
 #define NK_GLFW_GL3_IMPLEMENTATION
-#include "nuklear.h"
-#include "nuklear_glfw_gl3.h"
+#include "../third_party/nuklear/nuklear.h"
+#include "../third_party/nuklear/nuklear_glfw_gl3.h"
 
 
 /////////////////////////////////////////////////////////////////////////////////////////

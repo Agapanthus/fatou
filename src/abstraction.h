@@ -405,7 +405,7 @@ private:
 /*****************************[          Strings         ]******************************/
 
 #include <string>
-#include "utf8\utf8.h"
+#include <utf8.h>
 #include <sstream>
 #include <iomanip>
 
@@ -553,8 +553,8 @@ public:
 
 		// redirect unbuffered STDOUT to the console
 
-		lStdHandle = (long)GetStdHandle(STD_OUTPUT_HANDLE);
-		hConHandle = _open_osfhandle(lStdHandle, _O_TEXT);
+		lStdHandle = GetStdHandle(STD_OUTPUT_HANDLE);
+		hConHandle = _open_osfhandle((intptr_t)lStdHandle, _O_TEXT);
 		AConsole::fp[0] = _fdopen(hConHandle, "w");
 		ALLOC_CHECK(AConsole::fp[0]);
 		*stdout = *AConsole::fp[0];
@@ -568,8 +568,8 @@ public:
 
 		// redirect unbuffered STDIN to the console
 
-		lStdHandle = (long)GetStdHandle(STD_INPUT_HANDLE);
-		hConHandle = _open_osfhandle(lStdHandle, _O_TEXT);
+		lStdHandle = GetStdHandle(STD_INPUT_HANDLE);
+		hConHandle = _open_osfhandle((intptr_t)lStdHandle, _O_TEXT);
 		AConsole::fp[1] = _fdopen(hConHandle, "r");
 		ALLOC_CHECK(AConsole::fp[1]);
 		*stdin = *AConsole::fp[1];
@@ -581,8 +581,8 @@ public:
 
 		// redirect unbuffered STDERR to the console
 
-		lStdHandle = (long)GetStdHandle(STD_ERROR_HANDLE);
-		hConHandle = _open_osfhandle(lStdHandle, _O_TEXT);
+		lStdHandle = GetStdHandle(STD_ERROR_HANDLE);
+		hConHandle = _open_osfhandle((intptr_t)lStdHandle, _O_TEXT);
 		AConsole::fp[2] = _fdopen(hConHandle, "w");
 		ALLOC_CHECK(AConsole::fp[2]);
 		*stderr = *AConsole::fp[2];
@@ -620,7 +620,7 @@ public:
 private:
 #ifdef OS_WIN
 	int hConHandle;
-	long lStdHandle;
+	HANDLE lStdHandle;
 	CONSOLE_SCREEN_BUFFER_INFO coninfo;
 	FILE *fp[3];
 	std::ofstream *of[3];

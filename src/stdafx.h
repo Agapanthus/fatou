@@ -38,9 +38,14 @@ using std::thread;
 #include <condition_variable>
 
 // OpenGL
-#define GLEW_STATIC
-#include "../../third_party/glew-2.0.0/include/GL/glew.h"
-#include "../../third_party/glfw-3.2.1/include/GLFW/glfw3.h"
+//#define GLEW_STATIC
+//#include <GL/glew.h>
+#include <glbinding/gl/gl.h>
+#include <glbinding/Binding.h>
+using namespace gl;
+
+#define GLFW_INCLUDE_NONE
+#include <GLFW/glfw3.h>
 
 #define NK_INCLUDE_FIXED_TYPES
 #define NK_INCLUDE_STANDARD_IO
@@ -50,8 +55,8 @@ using std::thread;
 #define NK_GLFW_GL3_MOUSE_GRABBING 1
 #define NK_INCLUDE_FONT_BAKING
 #define NK_INCLUDE_DEFAULT_FONT
-#include "nuklear.h"
-#include "nuklear_glfw_gl3.h"
+#include "../third_party/nuklear/nuklear.h"
+#include "../third_party/nuklear/nuklear_glfw_gl3.h"
 
 #ifdef OS_WIN
 #include <shellapi.h>

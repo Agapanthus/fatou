@@ -42,7 +42,7 @@ public:
 	texture(const std::vector<unsigned char> &image, unsigned int width, unsigned int height);
 	texture(const std::string &filename);
 	~texture();
-	void use(GLuint textureID = GL_TEXTURE0);
+	void use(GLenum textureID = GL_TEXTURE0);
 protected:
 	void init(const std::vector<unsigned char> &image, unsigned int width, unsigned int height);
 	GLuint tex;
@@ -88,12 +88,12 @@ public:
 
 class syncBuffer {
 public:
-	syncBuffer(AiSize iSize, bool useMipmap, GLuint quality = GL_LINEAR, GLuint qualityM = GL_NEAREST);
+	syncBuffer(AiSize iSize, bool useMipmap, GLenum quality = GL_LINEAR, GLenum qualityM = GL_NEAREST);
 	~syncBuffer();
 	void writeTo(std::function<void(void)> content);
-	void upload(AiSize size, const float *data);
+//	void upload(AiSize size, const float *data);
 	void scale(AiSize iSize, bool useMipmap);
-	void readFrom(GLuint textureID = GL_TEXTURE0);
+	void readFrom(GLenum textureID = GL_TEXTURE0);
 	void framebufferRead();
 	void framebufferWrite();
 	AiSize getSize();
@@ -101,7 +101,7 @@ protected:
 	GLuint framebuffer, tex;
 	AiSize iSize;
 	bool useMipmap;
-	GLuint quality;
+	GLenum quality;
 };
 
 /////////////////////////////////////////////////////////////////////////////////////////
@@ -127,7 +127,7 @@ public:
 	}
 	void upload();
 	void scale(AiSize iSize);
-	void bind(GLuint textureID = GL_TEXTURE0);
+	void bind(GLenum textureID = GL_TEXTURE0);
 	AiSize getSize();
 protected:
 	GLuint tex;
@@ -141,17 +141,17 @@ protected:
 
 class syncBuffer3d {
 public:
-	syncBuffer3d(AiSize iSize, uint32 depth, GLuint quality = GL_NEAREST, GLuint qualityM = GL_NEAREST);
+	syncBuffer3d(AiSize iSize, uint32 depth, GLenum quality = GL_NEAREST, GLenum qualityM = GL_NEAREST);
 	~syncBuffer3d();
 	void writeTo(uint32 layer);
 	void scale(AiSize iSize);
-	void bind(GLuint textureID = GL_TEXTURE0);
+	void bind(GLenum textureID = GL_TEXTURE0);
 	AiSize getSize();
 protected:
 	GLuint *framebuffers, tex;
 	AiSize iSize;
 	uint32 depth;
-	GLuint quality;
+	GLenum quality;
 };
 
 

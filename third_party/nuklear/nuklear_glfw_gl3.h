@@ -98,7 +98,7 @@ static struct nk_glfw {
 NK_API void
 nk_glfw3_device_create(void)
 {
-	GLint status;
+	GLboolean status;
 	static const GLchar *vertex_shader =
 		NK_SHADER_VERSION
 		"uniform mat4 ProjMtx;\n"

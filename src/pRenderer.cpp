@@ -232,8 +232,8 @@ void pBuffer::recalculateCoeff() {
 	}
 	random_shuffle(std::begin(permutationMap), std::end(permutationMap));
 
-	for (size_t i = 0; i < QUEUE_LENGTH; i++) { // Iterations
-		for (size_t l = 0; l < QUEUE_LENGTH; l++) { // Layers
+	for (int32 i = 0; i < QUEUE_LENGTH; i++) { // Iterations
+		for (int32 l = 0; l < QUEUE_LENGTH; l++) { // Layers
 			//for(size_t p = 0; p < INTERP_POINTS; p++) { // Points					
 			
 			if (i < l) {
@@ -250,12 +250,12 @@ void pBuffer::recalculateCoeff() {
 					float relevance;
 				} points[INTERP_POINTS];
 
-				for (size_t p = 0; p < INTERP_POINTS; p++) { // Points		
+				for (int32 p = 0; p < INTERP_POINTS; p++) { // Points		
 
-					for (size_t w = 0; w < QUEUE_LENGTH; w++) {
+					for (int32 w = 0; w < QUEUE_LENGTH; w++) {
 						// Ignore Points which are already used
 						bool found = false;
-						for (size_t r = 0; r < p; r++) {
+						for (int32 r = 0; r < p; r++) {
 							if (points[r].layer == w) {
 								found = true;
 								break;

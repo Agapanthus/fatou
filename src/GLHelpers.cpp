@@ -17,7 +17,7 @@
 void glErrors(const char* wheres) {
 	GLenum err;
 	while ((err = glGetError()) != GL_NO_ERROR) {
-		fatalNote(string("OpenGL-Error@") + string(wheres) + ": " + std::to_string(err) + " " + string((const char*)gluErrorString(err)));
+		fatalNote(string("OpenGL-Error@") + string(wheres) + ": " + std::to_string((int32)err)); //TODO:  +" " + string((const char*)gluErrorString(err)));
 	}
 }
 #ifdef OS_WIN
@@ -31,19 +31,20 @@ uint32 gtimeGet() {
 #error IMPL
 #endif
 
+/*
 int getGPURAM() {
 #define GPU_MEMORY_INFO_TOTAL_AVAILABLE_MEMORY_NVX 0x9048
 #define VBO_FREE_MEMORY_ATI 0x87FB
 #define TEXTURE_FREE_MEMORY_ATI 0x87FC
 #define RENDERBUFFER_FREE_MEMORY_ATI 0x87FD
 	glGetError();
-	int values[4] = { 0,0,0,0 };
+	GLint values[4] = { 0,0,0,0 };
 	glGetIntegerv(GPU_MEMORY_INFO_TOTAL_AVAILABLE_MEMORY_NVX, values);
 	if (glGetError() == GL_NO_ERROR) return values[0];
 	glGetIntegerv(TEXTURE_FREE_MEMORY_ATI, values);
 	if (glGetError() == GL_NO_ERROR) return values[0];
 	return -1;
-}
+}*/
 
 /////////////////////////////////////////////////////////////////////////////////////////
 /*****************************[        Shader           ]*******************************/
@@ -86,7 +87,7 @@ shader::shader(const string &vertexShader, const string &fragmentShader) {
 	glAttachShader(shader::program, fshader);
 
 	glLinkProgram(shader::program);
-	GLint link_ok = GL_FALSE;
+	GLboolean link_ok = GL_FALSE;
 	glGetProgramiv(shader::program, GL_LINK_STATUS, &link_ok);
 	if (!link_ok) {
 		debugShader(program);
@@ -104,7 +105,7 @@ GLuint shader::upload(const string &shader, GLenum shaderType) {
 	glShaderSource(res, 2, sources, NULL);
 
 	glCompileShader(res);
-	GLint compile_ok = GL_FALSE;
+	GLboolean compile_ok = GL_FALSE;
 	glGetShaderiv(res, GL_COMPILE_STATUS, &compile_ok);
 	if (compile_ok == GL_FALSE) {
 		debugShader(res);
@@ -179,7 +180,7 @@ texture::texture(const std::string &filen) {
 texture::~texture() {
 	glDeleteTextures(1, &(texture::tex));
 }
-void texture::use(GLuint textureID) {
+void texture::use(GLenum textureID) {
 	glActiveTexture(textureID);
 	glBindTexture(GL_TEXTURE_2D, texture::tex);
 }
@@ -300,7 +301,7 @@ glLine::~glLine() {
 /////////////////////////////////////////////////////////////////////////////////////////
 /*****************************[       Sync buffer       ]*******************************/
 
-syncBuffer::syncBuffer(AiSize iSize, bool useMipmap, GLuint quality, GLuint qualityM) :
+syncBuffer::syncBuffer(AiSize iSize, bool useMipmap, GLenum quality, GLenum qualityM) :
 	iSize(iSize), useMipmap(useMipmap), quality(quality) {
 	glGenFramebuffers(1, &framebuffer);
 	glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
@@ -358,7 +359,7 @@ void syncBuffer::writeTo(std::function<void(void)> content) {
 		glGenerateMipmap(GL_TEXTURE_2D);
 	}
 }
-void syncBuffer::readFrom(GLuint textureID) {
+void syncBuffer::readFrom(GLenum textureID) {
 	glActiveTexture(textureID);
 	glBindTexture(GL_TEXTURE_2D, syncBuffer::tex);
 }
@@ -403,7 +404,7 @@ void floatStorage::scale(AiSize iSize) {
 	floatStorage::iSize = iSize;
 	floatStorage::data.resize(iSize.w * iSize.h * 4);
 }
-void floatStorage::bind(GLuint textureID) {
+void floatStorage::bind(GLenum textureID) {
 	glActiveTexture(textureID);
 	glBindTexture(GL_TEXTURE_2D, floatStorage::tex);
 }
@@ -414,7 +415,7 @@ AiSize floatStorage::getSize() {
 /////////////////////////////////////////////////////////////////////////////////////////
 /*****************************[  Volumetric Sync buffer ]*******************************/
 
-syncBuffer3d::syncBuffer3d(AiSize iSize, uint32 depth, GLuint quality, GLuint qualityM) :
+syncBuffer3d::syncBuffer3d(AiSize iSize, uint32 depth, GLenum quality, GLenum qualityM) :
 	iSize(iSize), depth(depth), quality(quality) {
 	syncBuffer3d::framebuffers = new GLuint[syncBuffer3d::depth];
 	glGenFramebuffers(depth, framebuffers);
@@ -458,7 +459,7 @@ void syncBuffer3d::writeTo(uint32 layer) {
 	glViewport(0, 0, syncBuffer3d::iSize.w, syncBuffer3d::iSize.h);
 	glErrors("syncBuffer3d::writeTo");
 }
-void syncBuffer3d::bind(GLuint textureID) {
+void syncBuffer3d::bind(GLenum textureID) {
 	glActiveTexture(textureID);
 	glBindTexture(GL_TEXTURE_3D, syncBuffer3d::tex);
 	glErrors("syncBuffer3d::bind");

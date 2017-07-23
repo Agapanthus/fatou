@@ -19,11 +19,11 @@
 
 class rTile : protected syncBuffer, public ANoncopyable {
 public:
-	rTile(AiSize size, float effort, GLuint magQuality = GL_NEAREST);
+	rTile(AiSize size, float effort, GLenum magQuality = GL_NEAREST);
 	~rTile();
 
 	void render(function<void(ARect tile)> content, AiSize tileSize, ARect position);
-	void draw(GLuint textureID = GL_TEXTURE0);
+	void draw(GLenum textureID = GL_TEXTURE0);
 
 	void scale(AiSize size, float effort);
 
@@ -33,7 +33,7 @@ public:
 	int getIter();
 	AiSize getSize();
 
-	void bind(GLuint textureID = GL_TEXTURE0);
+	void bind(GLenum textureID = GL_TEXTURE0);
 
 	void framebufferWrite();
 
@@ -45,7 +45,7 @@ protected:
 	sQuad quad;
 	bool useSwap;
 	AiSize tileSize;
-	GLuint magQuality;
+	GLenum magQuality;
 
 	pointer<syncBuffer> swapBuffer;
 
@@ -101,7 +101,7 @@ public:
 	
 	// Returns true, if there are tiles left
 	bool renderTile(function<void(ARect tile)> content);
-	void drawTile(GLuint textureID = GL_TEXTURE0);
+	void drawTile(GLenum textureID = GL_TEXTURE0);
 
 	void setEffort(float effort);
 	float getEffort() const;

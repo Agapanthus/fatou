@@ -82,7 +82,7 @@ app::app(GLFWwindow *window, nk_context* ctx) :
 	glfwGetWindowSize(app::window, &(app::width), &(app::height));
 
 	//app::optim.reset(new fOptimizer(float(app::targetFRate), app::maxDensityI));
-	app::colorMap.reset(new texture("../hue.png"));
+	app::colorMap.reset(new texture("res/hue.png"));
 	//app::renderer.reset(new tRenderer(AiSize(app::width, app::height), tiles, app::maxDensityI));
 	//app::progrenderer.reset(new pRenderer(AiSize(app::width, app::height), 1000.0f / app::targetFRate, app::maxDensityI));
 	//app::octx.reset(new offscreenctx<worker, workerMsg>(new worker()));

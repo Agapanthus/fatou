@@ -21,7 +21,7 @@ void rTile::framebufferWrite() {
 }
 
 
-rTile::rTile(AiSize size, float effort, GLuint magQuality) :
+rTile::rTile(AiSize size, float effort, GLenum magQuality) :
 	// Mipmaps are deactivated (caused artifacts). Instead, use series of linear copies! 
 	syncBuffer(AiSize( int(ceil(float(size.w)*effort)), int(ceil(float(size.h)*effort))), /*effort > 2.f*/ false, GL_LINEAR, magQuality), 
 	magQuality(magQuality),	size(size), effortQ(effort), effort(effort), position(0.0f,0.0f,0.0f,0.0f) {
@@ -125,7 +125,7 @@ void rTile::scale(AiSize size, float effort) {
 	}
 }
 
-void rTile::bind(GLuint textureID) {
+void rTile::bind(GLenum textureID) {
 	if (rTile::useSwap) {
 		rTile::swapBuffer->readFrom(textureID);
 	}
@@ -133,7 +133,7 @@ void rTile::bind(GLuint textureID) {
 		syncBuffer::readFrom(textureID);
 	}
 }
-void rTile::draw(GLuint textureID) {
+void rTile::draw(GLenum textureID) {
 	fassert(position.right - position.left > 0);
 	fassert(position.bottom - position.top > 0);
 
@@ -300,6 +300,6 @@ void tRenderer::setEffort(float effort) {
 float tRenderer::getEffort() const {
 	return tRenderer::effort;
 }
-void tRenderer::drawTile(GLuint textureID) {
+void tRenderer::drawTile(GLenum textureID) {
 	tRenderer::tile->draw(textureID);
 }
