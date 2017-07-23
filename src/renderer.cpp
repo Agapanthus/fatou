@@ -231,7 +231,6 @@ void fOptimizer::optimize(sRenderer *renderer) {
 			if (sleepTime > (17 - int(ceil(fOptimizer::floatingTime)) + fOptimizer::lastSleep)) 
 				sleepTime = 17 - int(ceil(fOptimizer::floatingTime)) + fOptimizer::lastSleep;
 			if (sleepTime < 0) sleepTime = 0;
-			cout << sleepTime << endl;
 			if(sleepTime > 0) QPC::sleep(sleepTime);
 			fOptimizer::lastSleep = sleepTime;
 		}

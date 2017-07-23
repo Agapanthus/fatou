@@ -8,7 +8,7 @@ Simple viewer for convergence conduct of polynomials solved using Newton's metho
 
 For Linux use:
 
-```bash
+```sh
 sudo apt-get install xorg-dev libglu1-mesa-dev zenity
 mkdir fatou
 cd fatou
@@ -24,7 +24,7 @@ cd bin
 For Windows use:
 
 
-```bash
+```sh
 git clone git://github.com/Agapanthus/fatou.git ./
 git submodule init
 git submodule update

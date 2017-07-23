@@ -69,6 +69,8 @@ using namespace gl;
 #define fopen_s(pFile,filename,mode) ((*(pFile))=fopen((filename),  (mode)))==NULL
 #endif
 
+// Path with trailing (back-)slash relative to which one can finde resources etc.! Is not defined before int main(2) is called!
+extern string basePath;
 
 /////////////////////////////////////////////////////////////////////////////////////////
 /*****************************[       Entry Point         ]*****************************/

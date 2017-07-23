@@ -13,6 +13,9 @@ set(FATOU_BUILD_DIR ${CMAKE_SOURCE_DIR}/bin CACHE STRING "Where to build fatou."
 set(CMAKE_BINARY_DIR ${FATOU_BUILD_DIR})
 set(EXECUTABLE_OUTPUT_PATH ${CMAKE_BINARY_DIR})
 set(LIBRARY_OUTPUT_PATH ${CMAKE_BINARY_DIR})
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
+set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 
 
 #////////////////////////////////////////////////////////////////#
@@ -65,9 +68,15 @@ IF(WIN32)
   IF(MSVC) 
     set_target_properties(fatou PROPERTIES LINK_FLAGS "/SUBSYSTEM:WINDOWS")
     set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT fatou)
+ 
+    set_target_properties(fatou PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
+    set_target_properties(fatou PROPERTIES RUNTIME_OUTPUT_DIRECTORY_DEBUG ${CMAKE_BINARY_DIR})
+    set_target_properties(fatou PROPERTIES RUNTIME_OUTPUT_DIRECTORY_RELEASE ${CMAKE_BINARY_DIR})
+    set_target_properties(fatou PROPERTIES RUNTIME_OUTPUT_DIRECTORY_MINSIZEREL ${CMAKE_BINARY_DIR})
+    set_target_properties(fatou PROPERTIES RUNTIME_OUTPUT_DIRECTORY_RELWITHDEBINFO ${CMAKE_BINARY_DIR})
+
   ENDIF()
 ENDIF()
-
 
 #////////////////////////////////////////////////////////////////#
 #*********************[   Cpy Res to bin   ]*********************#
