@@ -21,12 +21,12 @@ void rTile::framebufferWrite() {
 }
 
 
-rTile::rTile(AiSize size, float effort, GLenum magQuality) :
+rTile::rTile(AiSize size, float maxDensity1D, GLenum magQuality) :
 	// Mipmaps are deactivated (caused artifacts). Instead, use series of linear copies! 
-	syncBuffer(AiSize( int(ceil(float(size.w)*effort)), int(ceil(float(size.h)*effort))), /*effort > 2.f*/ false, GL_LINEAR, magQuality), 
-	magQuality(magQuality),	size(size), effortQ(effort), effort(effort), position(0.0f,0.0f,0.0f,0.0f) {
+	syncBuffer(AiSize( int(ceil(float(size.w)*maxDensity1D)), int(ceil(float(size.h)*maxDensity1D))), false, GL_LINEAR, magQuality), 
+	magQuality(magQuality),	size(size), samples(rTile::getSize().area()), maxDensity1D(maxDensity1D), position(0.0f,0.0f,0.0f,0.0f) {
 
-	if (rTile::effort > 2.0f) {
+	if (rTile::maxDensity1D > 2.0f) {
 		int iterations = rTile::getIter();
 		swapBuffer.reset(new syncBuffer(rTile::size * (1 << iterations), false, GL_LINEAR, magQuality));
 	}
@@ -36,19 +36,22 @@ rTile::~rTile() {
 
 }
 
-void rTile::render(std::function<void(ARect tile)> content, AiSize tileSize, ARect position) {
+uint64 rTile::render(std::function<void(ARect tile)> content, AiSize tileSize, ARect position) {
 	fassert(rTile::effortQ > 0);
 	fassert(tileSize.w <= rTile::size.w);
 	fassert(tileSize.h <= rTile::size.h);
 
-	int vw = (rTile::effortQ < rTile::effort) ? int(ceil(rTile::effortQ*float(tileSize.w))) : int(ceil(float(tileSize.w)*rTile::effort));
-	int vh = (rTile::effortQ < rTile::effort) ? int(ceil(rTile::effortQ*float(tileSize.h))) : int(ceil(float(tileSize.h)*rTile::effort));
+	float effortQ = float(pow(float(double(rTile::samples) / double(rTile::getSize().area())), 0.5f) * rTile::maxDensity1D);
+
+	int vw = (effortQ < rTile::maxDensity1D) ? int(ceil(effortQ*float(tileSize.w))) : int(ceil(float(tileSize.w)*rTile::maxDensity1D));
+	int vh = (effortQ < rTile::maxDensity1D) ? int(ceil(effortQ*float(tileSize.h))) : int(ceil(float(tileSize.h)*rTile::maxDensity1D));
 	rTile::tileSize = tileSize;
+
 
 	rTile::position = position;
 	glBindFramebuffer(GL_FRAMEBUFFER, syncBuffer::framebuffer);
 	glErrors("tRenderer::bind");
-	//cout << rTile::effortQ  << " " << size.w << " " << size.h << " | " << vw << " " << vh << endl;
+	//cout << effortQ  << " " << size.w << " " << size.h << " | " << vw << " " << vh << endl;
 	glViewport(0, 0, vw, vh);
 	if(content) content(position);
 	rTile::quad.draw(ARect(.0f,.0f,1.f,1.f), position);
@@ -59,7 +62,7 @@ void rTile::render(std::function<void(ARect tile)> content, AiSize tileSize, ARe
 		glBindTexture(GL_TEXTURE_2D, syncBuffer::tex);
 		glGenerateMipmap(GL_TEXTURE_2D);
 	}
-	else if (rTile::effortQ > 2.f) {
+	else if (effortQ > 2.f) {
 		int iterations = rTile::getIter();
 
 		// Downscale
@@ -77,28 +80,28 @@ void rTile::render(std::function<void(ARect tile)> content, AiSize tileSize, ARe
 			rTile::useSwap = !rTile::useSwap;
 			
 			AiSize smaller(rTile::size * (1 << i));
-		//	cout << vw << " " << vh << " | " << toString(smaller) << endl;
+
+			// TODO: Use Shader! Blit is quite slow!
 			glBlitFramebuffer(0, 0, last.w, last.h, 0, 0, smaller.w, smaller.h, GL_COLOR_BUFFER_BIT, GL_LINEAR);
 			last = smaller;
 			glErrors("rTile::blit");
 		}
 	}
+
+	return uint64(vw)*vh;
 }
 
-void rTile::setEffortQ(float effortQ) {
-	if (effortQ <= rTile::effort) {
-		rTile::effortQ = effortQ;
-	}		
-	else {
-		rTile::effortQ = rTile::effort;
-		rTile::scale(rTile::size, effort);
-	}
+void rTile::setSampleCount(uint64 samples) {
+	fassert(samples <= rTile::getSize().area());
+	rTile::samples = samples;
 }
 
 int rTile::getIter() {
-	int iterations = int(floor(log2(rTile::effortQ)));
+	float effortQ = float(pow(float(double(rTile::samples) / double(rTile::getSize().area())), 0.5f) * rTile::maxDensity1D);
+
+	int iterations = int(floor(log2(effortQ)));
 	// We don't need the additional iteration!
-	if (float(iterations) == log2(rTile::effortQ))
+	if (double(iterations) == log2(effortQ))
 		iterations--;
 	return iterations;
 }
@@ -107,13 +110,13 @@ AiSize rTile::getSize() {
 	return syncBuffer::getSize();
 }
 
-void rTile::scale(AiSize size, float effort) {
+void rTile::scale(AiSize size, float maxDensity1D) {
 	rTile::size = size;
-	syncBuffer::scale(AiSize(int(ceil(size.w*effort)), int(ceil(size.h*effort))), false /* effort > 2.f*/);
-	rTile::effort = effort;
-	rTile::effortQ = rTile::effort;
+	syncBuffer::scale(AiSize(int(ceil(size.w*maxDensity1D)), int(ceil(size.h*maxDensity1D))), false /* effort > 2.f*/);
+	rTile::maxDensity1D = maxDensity1D;
+	rTile::samples = rTile::getSize().area();
 
-	if (rTile::effort > 2.0f) {
+	if (rTile::maxDensity1D > 2.0f) {
 		int iterations = rTile::getIter();
 		if(swapBuffer.data())
 			swapBuffer->scale(rTile::size * (1 << iterations), false);
@@ -141,8 +144,11 @@ void rTile::draw(GLenum textureID) {
 
 	rTile::bind(textureID);
 
+
+	float effortQ = float(pow(float(double(rTile::samples) / double(rTile::getSize().area())), 0.5f) * rTile::maxDensity1D);
+
 	// if effort>2.0f data is already scaled to 2.0f using Blit
-	float mul = (minimum(rTile::effortQ, 2.0f) / rTile::effort);
+	float mul = (minimum(effortQ, 2.0f) / rTile::maxDensity1D);
 	if (rTile::useSwap) {
 		rTile::quad.draw(rTile::position, ARect(0.0f, 0.0f, 
 			(syncBuffer::iSize.w / float(rTile::swapBuffer->getSize().w)  ),
@@ -166,29 +172,33 @@ void rTile::draw(GLenum textureID) {
 /////////////////////////////////////////////////////////////////////////////////////////
 /*****************************[       fOptimizer        ]*******************************/
 
-fOptimizer::fOptimizer(float targetFrameRate, float maxEffort) 
-	: inited(false), targetFrameRate(targetFrameRate), maxEffort(maxEffort), notAgain(0), cuEffort(1.0f),
+fOptimizer::fOptimizer(double targetFrameRate, float maxDensity1D) 
+	: inited(false), targetFrameRate(targetFrameRate), maxDensity1D(maxDensity1D), notAgain(0), changing(1.0),
 	lastSleep(0) {
 
 }
-void fOptimizer::hint(float factor) {
-	fOptimizer::cuEffort *= factor;
+void fOptimizer::hint(double factor) {
+	fOptimizer::changing *= factor;
 }
-void fOptimizer::optimize(sRenderer *renderer) {
+void fOptimizer::optimize(sRenderer *renderer, uint64 samplesRendered) {
 	// TODO: Implement parameterChange
 	if (fOptimizer::inited == false) {
-		fOptimizer::inited = true;
-		if(renderer) renderer->setEffort(0.1f);
-		fOptimizer::floatingTime = QPC::get();
+		if(renderer) renderer->setSampleCount(10000); // TODO: Smarter way to choose initial samples?
+		if (samplesRendered > 0) {
+			fOptimizer::inited = true;
+			fOptimizer::floatingTime = QPC::get();
+		}
 	}
 	else {
 		double lastTime = QPC::get();
-		fOptimizer::floatingTime = (9.0*fOptimizer::floatingTime + lastTime) / 10.0;
-		float optimTime = 1000.0f / fOptimizer::targetFrameRate;
-		float ratio = sqrt( optimTime / float(fOptimizer::floatingTime) );
+		if (samplesRendered > 0) {
+			fOptimizer::floatingTime = (9.0*fOptimizer::floatingTime + lastTime) / 10.0;
+		}
+		double optimTime = 1000.0 / fOptimizer::targetFrameRate;
+		double ratio = sqrt( optimTime / fOptimizer::floatingTime);
 		notAgain--;
 
-		float inverseCuEf = 1.0f / fOptimizer::cuEffort;
+		double inverseCuEf = 1.0 / fOptimizer::changing;
 		if (abs(inverseCuEf - 1.0f) > 0.1f) {
 			// Something like a buffer scale caused rendering time to increase dramatically
 			
@@ -200,7 +210,7 @@ void fOptimizer::optimize(sRenderer *renderer) {
 		}
 		else {
 			// Let it decay...
-			fOptimizer::cuEffort = (fOptimizer::cuEffort + 1.0f) / 2.0f;
+			fOptimizer::changing = (fOptimizer::changing + 1.0) / 2.0;
 		}
 
 
@@ -210,14 +220,14 @@ void fOptimizer::optimize(sRenderer *renderer) {
 			
 			notAgain = 10;
 
-			fOptimizer::cuEffort = 1.0f;
+			fOptimizer::changing = 1.0;
 
-			fOptimizer::aEffort = renderer->getEffort();
-			fOptimizer::aEffort *= ratio;
-			if (fOptimizer::aEffort < 0.01f) fOptimizer::aEffort = 0.01f;
-			else if (fOptimizer::aEffort > fOptimizer::maxEffort) fOptimizer::aEffort = fOptimizer::maxEffort;
+			fOptimizer::aSamples = renderer->getSampleCount();
+			fOptimizer::aSamples = uint64(round(double(fOptimizer::aSamples) * ratio));
+			if (fOptimizer::aSamples < 100) fOptimizer::aSamples = 100; // Minimum Samples
+			else if (fOptimizer::aSamples > double(fOptimizer::maxDensity1D*fOptimizer::maxDensity1D) * double(renderer->getSize().area())) fOptimizer::aSamples = double(fOptimizer::maxDensity1D*fOptimizer::maxDensity1D) * double(renderer->getSize().area());
 
-			renderer->setEffort(fOptimizer::aEffort);
+			renderer->setSampleCount(fOptimizer::aSamples);
 
 			//cout << fOptimizer::aEffort << endl;
 
@@ -227,7 +237,7 @@ void fOptimizer::optimize(sRenderer *renderer) {
 
 		// Sleep if Framerate is highter than 60FPS
 		if ((optimTime - lastTime > 1.0)/* && (fOptimizer::aEffort == fOptimizer::maxEffort)*/) {
-			int sleepTime = int(floor(optimTime - lastTime));
+			uint64 sleepTime = int(floor(optimTime - lastTime));
 			if (sleepTime > (17 - int(ceil(fOptimizer::floatingTime)) + fOptimizer::lastSleep)) 
 				sleepTime = 17 - int(ceil(fOptimizer::floatingTime)) + fOptimizer::lastSleep;
 			if (sleepTime < 0) sleepTime = 0;
@@ -236,14 +246,14 @@ void fOptimizer::optimize(sRenderer *renderer) {
 		}
 	}
 }
-float fOptimizer::getPixelDensity() const {
-	return fOptimizer::aEffort;
+uint64 fOptimizer::getSamples() const {
+	return fOptimizer::aSamples;
 }
 void fOptimizer::setTargetFramerate(float targetFramerate) {
 	fOptimizer::targetFrameRate = targetFramerate;
 }
-void fOptimizer::setMaxEffort(float maxEffort) {
-	fOptimizer::maxEffort = maxEffort;
+void fOptimizer::setMaxDensity1D(float maxDensity1D) {
+	fOptimizer::maxDensity1D = maxDensity1D;
 }
 float fOptimizer::getFramerate() const {
 	return float(1000.0 / fOptimizer::floatingTime);
@@ -254,20 +264,20 @@ float fOptimizer::getFramerate() const {
 /*****************************[        tRenderer        ]*******************************/
 
 tRenderer::tRenderer(AiSize size, AiSize tiles, float maxEffort) : 
-	effort(0.01f), tilec(0), tileArea(0.0f,0.0f,0.0f,0.0f) {
+	samples(size.area()), tilec(0), tileArea(0.0f,0.0f,0.0f,0.0f) {
 	tRenderer::setSize(size, tiles, maxEffort);
 }
 tRenderer::~tRenderer() {
 
 }
-void tRenderer::setSize(AiSize size, AiSize tiles, float maxEffort) {
-	tRenderer::maxEffort = maxEffort;
+void tRenderer::setSize(AiSize size, AiSize tiles, float maxDensity1D) {
+	tRenderer::maxDensity1D = maxDensity1D;
 	tRenderer::tiles = tiles;
 	tRenderer::size = size;
-	tRenderer::tile.reset(new rTile(AiSize( int(ceil(size.w / float(tiles.w))), int(ceil(size.h / float(tiles.h)))), tRenderer::maxEffort, (tiles.w*tiles.h == 1) ? GL_LINEAR : GL_NEAREST));
-	tRenderer::tile->setEffortQ(tRenderer::effort);
+	tRenderer::tile.reset(new rTile(AiSize( int(ceil(size.w / float(tiles.w))), int(ceil(size.h / float(tiles.h)))), tRenderer::maxDensity1D, (tiles.w*tiles.h == 1) ? GL_LINEAR : GL_NEAREST));
+	tRenderer::tile->setSampleCount(tRenderer::samples);
 }
-bool tRenderer::renderTile(std::function<void(ARect tile)> content) {
+bool tRenderer::renderTile(std::function<void(ARect tile)> content, uint64 &samplesRendered) {
 	
 	if (tRenderer::tilec >= tRenderer::tiles.w*tRenderer::tiles.h) {
 		tRenderer::tilec = 0;
@@ -291,17 +301,20 @@ bool tRenderer::renderTile(std::function<void(ARect tile)> content) {
 	tRenderer::tileArea = ARect(xywh.left / float(tRenderer::size.w), xywh.top / float(tRenderer::size.h),
 		(xywh.left + xywh.right) / float(tRenderer::size.w), (xywh.top + xywh.bottom) / float(tRenderer::size.h));
 
-	tRenderer::tile->render(content, AiSize(xywh.right, xywh.bottom), tRenderer::tileArea);
+	samplesRendered += tRenderer::tile->render(content, AiSize(xywh.right, xywh.bottom), tRenderer::tileArea);
 	tRenderer::tilec++;
 	return true;
 }
-void tRenderer::setEffort(float effort) {
-	tRenderer::effort = effort;
-	tRenderer::tile->setEffortQ(effort);
+void tRenderer::setSampleCount(uint64 samples) {
+	tRenderer::samples = samples;
+	tRenderer::tile->setSampleCount(samples);
 }
-float tRenderer::getEffort() const {
-	return tRenderer::effort;
+uint64 tRenderer::getSampleCount() const {
+	return tRenderer::samples;
 }
 void tRenderer::drawTile(GLenum textureID) {
 	tRenderer::tile->draw(textureID);
+}
+AiSize tRenderer::getSize() const {
+	return tRenderer::size;
 }

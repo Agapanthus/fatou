@@ -19,16 +19,15 @@
 
 class rTile : protected syncBuffer, public ANoncopyable {
 public:
-	rTile(AiSize size, float effort, GLenum magQuality = GL_NEAREST);
+	rTile(AiSize size, float maxDensity1D, GLenum magQuality = GL_NEAREST);
 	~rTile();
 
-	void render(function<void(ARect tile)> content, AiSize tileSize, ARect position);
+	uint64 render(function<void(ARect tile)> content, AiSize tileSize, ARect position);
 	void draw(GLenum textureID = GL_TEXTURE0);
 
-	void scale(AiSize size, float effort);
+	void scale(AiSize size, float maxDensity1D);
 
-	// if effortQ is <= effort, subcache is used (fast!)
-	void setEffortQ(float effortQ);
+	void setSampleCount(uint64 samples);
 
 	int getIter();
 	AiSize getSize();
@@ -38,7 +37,8 @@ public:
 	void framebufferWrite();
 
 protected:
-	float effort, effortQ;
+	float maxDensity1D;
+	uint64 samples;
 	AiSize size;
 //	bool useMargin;
 	ARect position;
@@ -57,10 +57,9 @@ protected:
 
 class sRenderer {
 public:
-	// effort is about proportional to the square of the time necessary to render
-	// a tile and controls the resolution of the tile.
-	virtual void setEffort(float effort) = 0;
-	virtual float getEffort() const = 0;
+	virtual void setSampleCount(uint64 samples) = 0;
+	virtual uint64 getSampleCount() const = 0;
+	virtual AiSize getSize() const = 0;
 };
 
 /////////////////////////////////////////////////////////////////////////////////////////
@@ -68,22 +67,22 @@ public:
 
 class fOptimizer : public QPC, public ANoncopyable {
 public:
-	fOptimizer(float targetFrameRate, float maxEffort = 2.0f);
-	void hint(float factor);  // factor should be an estimate for the change in rendering time due to parameter change (eg, factor=2.0f if rendering is expected to take twice as long)
-	void optimize(sRenderer *renderer);
+	fOptimizer(double targetFrameRate, float maxDensity1D = 2.0f);
+	void hint(double factor);  // factor should be an estimate for the change in rendering time due to parameter change (eg, factor=2.0f if rendering is expected to take twice as long)
+	void optimize(sRenderer *renderer, uint64 samplesRendered);
 	void setTargetFramerate(float targetFrameRate); // Dont call hint!
-	void setMaxEffort(float maxEffort);
-	float getPixelDensity() const;
+	void setMaxDensity1D(float maxDensity1D);
+	uint64 getSamples() const;
 	float getFramerate() const;
 private:
 	bool inited;
-	float targetFrameRate;
-	float maxEffort;
+	double targetFrameRate;
+	float maxDensity1D;
 	double floatingTime;
 	int notAgain;
-	float cuEffort;
-	float aEffort;
-	int lastSleep;
+	double changing;
+	uint64 aSamples;
+	uint64 lastSleep;
 };
 
 
@@ -94,20 +93,22 @@ private:
 // in order to reduce memory consumption.
 class tRenderer : public sRenderer, public ANoncopyable {
 public:
-	tRenderer(AiSize size, AiSize tiles, float maxEffort = 2.0f);
+	tRenderer(AiSize size, AiSize tiles, float maxDensity1D = 2.0f);
 	~tRenderer();
 
-	void setSize(AiSize size, AiSize tiles, float maxEffort = 2.0f);
+	void setSize(AiSize size, AiSize tiles, float maxDensity1D = 2.0f);
 	
 	// Returns true, if there are tiles left
-	bool renderTile(function<void(ARect tile)> content);
+	bool renderTile(function<void(ARect tile)> content, uint64 &samplesRendered);
 	void drawTile(GLenum textureID = GL_TEXTURE0);
 
-	void setEffort(float effort);
-	float getEffort() const;
+	void setSampleCount(uint64 samples);
+	uint64 getSampleCount() const;
+	AiSize getSize() const;
 
 protected:
-	float effort, maxEffort;
+	uint64 samples;
+	float maxDensity1D;
 	pointer<rTile> tile;
 	AiSize tiles, size;
 	ARect tileArea;

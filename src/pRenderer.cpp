@@ -373,8 +373,8 @@ void pBuffer::draw(int x, int y, ARect t) {
 	}
 #endif
 }
-void pBuffer::render(float effort, function<void(void)> renderF) {
-
+uint64 pBuffer::render(uint64 inSamples, function<void(void)> renderF) {
+	int64 samplesLeft = inSamples;
 	bool changed = false;
 #ifdef MEASURE_PERFORMANCE
 	glQueryCreator gqt;
@@ -382,11 +382,11 @@ void pBuffer::render(float effort, function<void(void)> renderF) {
 		glQuery q = gqt.create();
 #endif
 
-		while (effort > 0.0f) {
+		while (samplesLeft > 0) {
 			if (pBuffer::currentBuffer == QUEUE_LENGTH) break;
+			
+			uint32 posxnew = minimum(uint32(buffer->getSize().w), posx + uint32(round(double(samplesLeft) / double(buffer->getSize().h))));
 
-
-			int posxnew = minimum(int(buffer->getSize().w), int(round(posx + (float(QUEUE_LENGTH) * effort * float(buffer->getSize().w)))));
 			if (posxnew == posx) {
 				break;
 			}
@@ -409,7 +409,7 @@ void pBuffer::render(float effort, function<void(void)> renderF) {
 				changed = true;
 				pBuffer::posx = 0;
 			}
-			effort -= (partT.right - partT.left) / float(QUEUE_LENGTH);
+			samplesLeft -= uint64(round((partT.right - partT.left) * buffer->getSize().w)) * buffer->getSize().h;
 		}
 #ifdef MEASURE_PERFORMANCE
 	}
@@ -425,6 +425,8 @@ void pBuffer::render(float effort, function<void(void)> renderF) {
 	}
 	if (changed) cout << "Compose: " << gqt.getTime() << " ms" << endl;
 #endif
+	
+	return inSamples - samplesLeft;
 }
 void pBuffer::compose() {
 
@@ -466,34 +468,30 @@ void pBuffer::discard() {
 /////////////////////////////////////////////////////////////////////////////////////////
 /*****************************[   Progressive Renderer  ]*******************************/
 
-pRenderer::pRenderer(AiSize size, float maxEffort) : size(size), maxEffort(maxEffort), effort(0.1f), minQuality(1.0f,1.0f), fresh(false) {
-	pRenderer::buffer.reset(new pBuffer(AiSize(int(ceil(size.w * maxEffort)), int(ceil(size.h*maxEffort)))));
+pRenderer::pRenderer(AiSize size, float maxDensity1D) : size(size), maxDensity1D(maxDensity1D), samples(100), minQuality(1.0f,1.0f), fresh(false) {
+	pRenderer::buffer.reset(new pBuffer(AiSize(int(ceil(size.w * maxDensity1D)), int(ceil(size.h*maxDensity1D)))));
 }
 
 pRenderer::~pRenderer() {
 
 }
 
-void pRenderer::render(function<void(void)> renderF, bool discard) {
+uint64 pRenderer::render(function<void(void)> renderF, bool discard) {
 	if(discard)	buffer->discard();
-	buffer->render(pRenderer::effort / pRenderer::maxEffort, renderF);
+	return buffer->render(pRenderer::samples, renderF);
 }
 
-void pRenderer::setSize(AiSize size, float maxEffort) {
-	pRenderer::maxEffort = maxEffort;
+void pRenderer::setSize(AiSize size, float maxDensity1D) {
+	pRenderer::maxDensity1D = maxDensity1D;
 	pRenderer::size = size;
-	buffer->scale(AiSize(int(ceil(size.w * maxEffort)), int(ceil(size.h*maxEffort))));
+	buffer->scale(AiSize(int(ceil(size.w * maxDensity1D)), int(ceil(size.h * maxDensity1D))));
 }
 
-void pRenderer::setEffort(float effort) {
-	fassert(pRenderer::maxEffort >= effort);
-
-	effort = 1.0f / QUEUE_LENGTH; 
-	
-	pRenderer::effort = effort;
+void pRenderer::setSampleCount(uint64 samples) {
+	pRenderer::samples = samples;
 }
-float pRenderer::getEffort() const {
-	return pRenderer::effort;
+uint64 pRenderer::getSampleCount() const {
+	return pRenderer::samples;
 }
 void pRenderer::draw(int x, int y) {
 	// Solving z2 * (t1 - 0.5) + p2 = z1 * (t2 - 0.5) + p1 for t2 with t1 = (0,0) or t2 = (1,1)
@@ -504,7 +502,7 @@ void pRenderer::draw(int x, int y) {
 }
 
 void pRenderer::view(APoint pos, ASize zoom, function<void(APoint, ASize)> viewF) {
-	// TODO: Zwei Puffer! Den zweiten erst zeigen, sobald der neue besser als der alte ist!
+	// TODO: Zwei Puffer! Den zweiten erst zeigen, sobald der neue besser als der alte ist! Dadurch auch das Ruckeln entfernen!
 	// TODO: Wenn am Rand was gebraucht wird, nur diesen Randbereich neurendern!
 
 	if (pRenderer::targetP == pos && pRenderer::targetZ == zoom && 
@@ -520,13 +518,13 @@ void pRenderer::view(APoint pos, ASize zoom, function<void(APoint, ASize)> viewF
 		pRenderer::targetP = pos; 
 		pRenderer::targetZ = zoom;
 
-		ASize qualy(pRenderer::targetZ.w / pRenderer::realZ.w * pRenderer::maxEffort, pRenderer::targetZ.h / pRenderer::realZ.h * pRenderer::maxEffort);
+		ASize qualy(pRenderer::targetZ.w / pRenderer::realZ.w * pRenderer::maxDensity1D, pRenderer::targetZ.h / pRenderer::realZ.h * pRenderer::maxDensity1D);
 		if (qualy.w < minQuality.w || qualy.h < minQuality.h) {
 			pRenderer::realZ = pRenderer::targetZ;
 			pRenderer::realP = pRenderer::targetP;
 			pRenderer::fresh = false;
 		}
-		else if (qualy.w > maxEffort || qualy.h > maxEffort) {
+		else if (qualy.w > maxDensity1D || qualy.h > maxDensity1D) {
 			// TODO: Provisorisch! Smart update !
 			pRenderer::realZ = pRenderer::targetZ*2.0f;
 			pRenderer::realP = pRenderer::targetP;
@@ -550,4 +548,8 @@ void pRenderer::view(APoint pos, ASize zoom, function<void(APoint, ASize)> viewF
 			}
 		}
 	}
+}
+
+AiSize pRenderer::getSize() const {
+	return pRenderer::size;
 }

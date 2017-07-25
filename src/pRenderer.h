@@ -35,7 +35,7 @@ public:
 	void discard();
 	void draw(int x, int y, ARect tC);
 	void compose();
-	void render(float effort, function<void(void)> renderF);
+	uint64 render(uint64 samples, function<void(void)> renderF);
 
 private:
 	//vector<pointer<syncBuffer>> buffers;
@@ -72,23 +72,25 @@ private:
 // Scroll around, choose good buffer sizes...
 class pRenderer : public sRenderer {
 public:
-	pRenderer(AiSize size, float maxEffort);
+	pRenderer(AiSize size, float maxDensity1D);
 	~pRenderer();
 
 	void view(APoint pos, ASize zoom, function<void(APoint, ASize)> viewF);
 
-	void render(function<void(void)> renderF, bool discard);
-	void setSize(AiSize size, float maxEffort);
+	uint64 render(function<void(void)> renderF, bool discard);
+	void setSize(AiSize size, float maxDensity1D);
 
-	void setEffort(float effort);
-	float getEffort() const;
+	void setSampleCount(uint64 samples);
+	uint64 getSampleCount() const;
 	void draw(int x, int y);
+
+	AiSize getSize() const;
 
 private:
 	pointer<pBuffer> buffer;
-	float maxEffort;
+	float maxDensity1D;
 	AiSize size;
-	float effort;
+	uint64 samples;
 
 	ASize targetZ, realZ;
 	APoint targetP, realP;

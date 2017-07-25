@@ -234,6 +234,10 @@ struct AiSize {
 	inline float magnitude() {
 		return sqrtf(float(AiSize::w*AiSize::w + AiSize::h*AiSize::h));
 	}
+
+	inline int64 area() {
+		return int64(AiSize::w)*AiSize::h;
+	}
 };
 
 typedef AiSize AiPoint;

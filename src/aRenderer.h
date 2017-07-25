@@ -21,13 +21,13 @@
 
 class aRenderer : public ANoncopyable {
 public:
-	aRenderer(AiSize size, AiSize tiles, float maxEffort, float targetFramerate, function<void(void)> renderF);
+	aRenderer(AiSize size, AiSize tiles, float maxDensity1D, float targetFramerate, function<void(void)> renderF);
 	~aRenderer();
 	void render(int x, int y, bool changed);
 	void setSize(AiSize size);
-	void setMaxEffort(float effort);
+	void setMaxEffort(float maxDensity1D);
 	void setTargetFramerate(float framerate);
-	float getPixelDensity();
+	float getDensity1D();
 	float getFramerate();
 
 	void view(APoint pos, ASize zoom, function<void(APoint, ASize)> viewF);
@@ -35,7 +35,7 @@ public:
 protected:
 	pointer<fOptimizer> optim;
 	AiSize windowSize;
-	float maxEffort;
+	float maxDensity1D;
 	AiSize tiles;
 	pointer<shader> texprogram;
 	bool useProgressive;
@@ -48,4 +48,6 @@ protected:
 	ASize realZ;
 	APoint realP;
 	function<void(APoint, ASize)> viewF;
+
+	uint64 samplesRendered;
 };

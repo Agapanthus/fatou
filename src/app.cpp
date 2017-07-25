@@ -279,7 +279,7 @@ void app::logic() {
 			nk_layout_row_dynamic(ctx, 20, 2);
 			TOOLTIP("samples per pixel (density > 1.0 leads to antialiasing)");
 			nk_label(ctx, "Density:", NK_TEXT_RIGHT);
-			float dens = app::renderer->getPixelDensity();
+			float dens = app::renderer->getDensity1D();
 			nk_label(ctx, toString(dens*dens, 2).c_str(), NK_TEXT_LEFT);
 
 

@@ -16,18 +16,18 @@
 /////////////////////////////////////////////////////////////////////////////////////////
 /*****************************[      autoRenderer       ]*******************************/
 
-aRenderer::aRenderer(AiSize size, AiSize tiles, float maxEffort, float targetFramerate, function<void(void)> renderF) :
-	tiles(tiles), maxEffort(maxEffort), renderF(renderF), windowSize(size), useProgressive(true),
-	realZ(0.0f,0.0f), realP(0.0f,0.0f) {
-	tR.reset(new tRenderer(size, tiles, maxEffort));
+aRenderer::aRenderer(AiSize size, AiSize tiles, float maxDensity1D, float targetFramerate, function<void(void)> renderF) :
+	tiles(tiles), maxDensity1D(maxDensity1D), renderF(renderF), windowSize(size), useProgressive(true),
+	realZ(0.0f,0.0f), realP(0.0f,0.0f), samplesRendered(0) {
+	tR.reset(new tRenderer(size, tiles, maxDensity1D));
 
 	texprogram.reset(new shader(mainVertexShader, viewtexture));
 	texprogram->use();
 	glUniform1i(texprogram->getUniform("screenTexture"), 0);
 
-	optim.reset(new fOptimizer(targetFramerate, maxEffort));
+	optim.reset(new fOptimizer(targetFramerate, maxDensity1D));
 
-	pR.reset(new pRenderer(size, maxEffort));
+	pR.reset(new pRenderer(size, maxDensity1D));
 
 	//octx.reset(new offscreenctx<worker, workerMsg>(new worker()));
 	//octx->start();
@@ -50,11 +50,11 @@ void aRenderer::render(int x, int y, bool changed) {
 	useProgressive = !changed;
 
 	// Using the aRender instead of pRender after Changes which will not repeat in the following frames is good, because the aRenderer will present a preview Frame which can be shown while pRender still works on it's first Frame!
-
+	
 	if (aRenderer::useProgressive) {
 		pR->view(aRenderer::realP, aRenderer::realZ, aRenderer::viewF);
-		optim->optimize((sRenderer*)pR.data());
-		pR->render(renderF, didntUsedProgressive);
+		optim->optimize((sRenderer*)pR.data(), aRenderer::samplesRendered);
+		aRenderer::samplesRendered = pR->render(renderF, didntUsedProgressive);
 		glBindFramebuffer(GL_FRAMEBUFFER, 0);
 		glViewport(0, 0, aRenderer::windowSize.w, aRenderer::windowSize.h);
 		texprogram->use();
@@ -63,8 +63,9 @@ void aRenderer::render(int x, int y, bool changed) {
 	else {
 		aRenderer::viewF(aRenderer::realP, aRenderer::realZ);
 
-		optim->optimize((sRenderer*)tR.data());
-		while (tR->renderTile([this](ARect tile) -> void { renderF(); })) {
+		optim->optimize((sRenderer*)tR.data(), aRenderer::samplesRendered);
+		aRenderer::samplesRendered = 0;
+		while (tR->renderTile([this](ARect tile) -> void { renderF(); }, aRenderer::samplesRendered)) {
 			glBindFramebuffer(GL_FRAMEBUFFER, 0);
 			glViewport(0, 0, aRenderer::windowSize.w, aRenderer::windowSize.h);
 			texprogram->use();
@@ -75,27 +76,27 @@ void aRenderer::render(int x, int y, bool changed) {
 void aRenderer::setSize(AiSize size) {
 	if (aRenderer::useProgressive) {
 		//octx->push(sizeChangeMessage(size));
-		aRenderer::pR->setSize(size, maxEffort);
+		aRenderer::pR->setSize(size, aRenderer::maxDensity1D);
 	}
 	else {
-		aRenderer::tR->setSize(size, tiles, maxEffort);
+		aRenderer::tR->setSize(size, tiles, aRenderer::maxDensity1D);
 	}
 	windowSize = size;	
 	aRenderer::optim->hint(float(windowSize.w*windowSize.h) / (size.w*size.h)); // TODO: This won't work properly when maximizing a window with degree 200 polynomials inside!
 }
 
-void aRenderer::setMaxEffort(float effort) {
-	aRenderer::optim->setMaxEffort(effort);
-	aRenderer::maxEffort = effort;
-	aRenderer::pR->setSize(windowSize, maxEffort);
+void aRenderer::setMaxEffort(float maxDensity1D) {
+	aRenderer::optim->setMaxDensity1D(maxDensity1D);
+	aRenderer::maxDensity1D = maxDensity1D;
+	aRenderer::pR->setSize(windowSize, maxDensity1D);
 }
 
 void aRenderer::setTargetFramerate(float framerate) {
 	aRenderer::optim->setTargetFramerate(framerate);
 }
 
-float aRenderer::getPixelDensity() {
-	return aRenderer::optim->getPixelDensity();
+float aRenderer::getDensity1D() {
+	return float(sqrt(double(aRenderer::optim->getSamples()) / double(aRenderer::windowSize.area())));
 }
 float aRenderer::getFramerate() {
 	return aRenderer::optim->getFramerate();
