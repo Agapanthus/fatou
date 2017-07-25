@@ -121,7 +121,7 @@ int roundUpToNextMultipleOfN(int numToRound, int N) {
 }
 
 pBuffer::pBuffer(AiSize size) :
-	syncBuffer(size, false, GL_LINEAR, GL_NEAREST), size(0, 0) {
+	syncBuffer(size, false, GL_LINEAR, GL_LINEAR), size(0, 0) {
 
 	// Check if there are enough texture units for interpolation
 	/*	GLint texture_units = 0;
@@ -313,10 +313,12 @@ void pBuffer::recalculateCoeff() {
 	coeffBuffer->upload();
 }
 
-void pBuffer::draw(int x, int y) {
+void pBuffer::draw(int x, int y, ARect t) {
+	// TODO: You should always draw!
 	if (pBuffer::currentBuffer > 0) {
 		syncBuffer::readFrom();
-		pBuffer::quad.draw();
+		ARect e(0.0f, 0.0f, 1.0f, 1.0f);
+		pBuffer::quad.draw(ARect(0.0f, 0.0f, 1.0f, 1.0f), t );
 	}
 	
 #if 0
@@ -383,6 +385,7 @@ void pBuffer::render(float effort, function<void(void)> renderF) {
 		while (effort > 0.0f) {
 			if (pBuffer::currentBuffer == QUEUE_LENGTH) break;
 
+
 			int posxnew = minimum(int(buffer->getSize().w), int(round(posx + (float(QUEUE_LENGTH) * effort * float(buffer->getSize().w)))));
 			if (posxnew == posx) {
 				break;
@@ -400,6 +403,7 @@ void pBuffer::render(float effort, function<void(void)> renderF) {
 			buffer->writeTo(permutationMap[pBuffer::currentBuffer]);
 			renderF();
 			quad.draw(part, partT + delta);
+
 			if (posxnew == buffer->getSize().w) {
 				pBuffer::currentBuffer++;
 				changed = true;
@@ -462,7 +466,7 @@ void pBuffer::discard() {
 /////////////////////////////////////////////////////////////////////////////////////////
 /*****************************[   Progressive Renderer  ]*******************************/
 
-pRenderer::pRenderer(AiSize size, float maxEffort) : size(size), maxEffort(maxEffort), effort(0.1f) {
+pRenderer::pRenderer(AiSize size, float maxEffort) : size(size), maxEffort(maxEffort), effort(0.1f), minQuality(1.0f,1.0f), fresh(false) {
 	pRenderer::buffer.reset(new pBuffer(AiSize(int(ceil(size.w * maxEffort)), int(ceil(size.h*maxEffort)))));
 }
 
@@ -492,5 +496,58 @@ float pRenderer::getEffort() const {
 	return pRenderer::effort;
 }
 void pRenderer::draw(int x, int y) {
-	buffer->draw(x, y);
+	// Solving z2 * (t1 - 0.5) + p2 = z1 * (t2 - 0.5) + p1 for t2 with t1 = (0,0) or t2 = (1,1)
+	ASize t2_00((targetZ * (-0.5f) + targetP - realP) / realZ + 0.5f);
+	ASize t2_11((targetZ * (0.5f) + targetP - realP) / realZ + 0.5f);
+	ARect tC(t2_00.w, t2_00.h, t2_11.w, t2_11.h);
+	buffer->draw(x, y, tC);
+}
+
+void pRenderer::view(APoint pos, ASize zoom, function<void(APoint, ASize)> viewF) {
+	// TODO: Zwei Puffer! Den zweiten erst zeigen, sobald der neue besser als der alte ist!
+	// TODO: Wenn am Rand was gebraucht wird, nur diesen Randbereich neurendern!
+
+	if (pRenderer::targetP == pos && pRenderer::targetZ == zoom && 
+		(pRenderer::realZ != pRenderer::targetZ || pRenderer::realP != pRenderer::targetP)) {
+		pRenderer::fresh = true;
+		pRenderer::realZ = pRenderer::targetZ;
+		pRenderer::realP = pRenderer::targetP;
+		viewF(pRenderer::realP, pRenderer::realZ);
+		pRenderer::buffer->discard();
+		cout << "stabil" << endl;
+	}
+	else {
+		pRenderer::targetP = pos; 
+		pRenderer::targetZ = zoom;
+
+		ASize qualy(pRenderer::targetZ.w / pRenderer::realZ.w * pRenderer::maxEffort, pRenderer::targetZ.h / pRenderer::realZ.h * pRenderer::maxEffort);
+		if (qualy.w < minQuality.w || qualy.h < minQuality.h) {
+			pRenderer::realZ = pRenderer::targetZ;
+			pRenderer::realP = pRenderer::targetP;
+			pRenderer::fresh = false;
+		}
+		else if (qualy.w > maxEffort || qualy.h > maxEffort) {
+			// TODO: Provisorisch! Smart update !
+			pRenderer::realZ = pRenderer::targetZ*2.0f;
+			pRenderer::realP = pRenderer::targetP;
+			viewF(pRenderer::realP, pRenderer::realZ);
+			pRenderer::buffer->discard();
+			pRenderer::fresh = false;
+		}
+
+		if (pRenderer::realZ == ASize(0.0f, 0.0f)) {
+			pRenderer::realZ = pRenderer::targetZ;
+			pRenderer::realP = pRenderer::targetP;
+			viewF(pRenderer::realP, pRenderer::realZ);
+			pRenderer::buffer->discard();
+			pRenderer::fresh = true;
+		}
+		else if (pRenderer::realZ == pRenderer::targetZ && pRenderer::realP == pRenderer::targetP) {
+			if (!pRenderer::fresh) {
+				pRenderer::fresh = true;
+				viewF(pRenderer::realP, pRenderer::realZ);
+				pRenderer::buffer->discard();
+			}
+		}
+	}
 }

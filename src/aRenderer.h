@@ -10,7 +10,7 @@
 
 #pragma once
 #include "stdafx.h"
-#include "renderer.h"
+#include "tRenderer.h"
 #include "pRenderer.h"
 //#include "parallelctx.h"
 //#include "worker.h"
@@ -30,6 +30,7 @@ public:
 	float getPixelDensity();
 	float getFramerate();
 
+	void view(APoint pos, ASize zoom, function<void(APoint, ASize)> viewF);
 
 protected:
 	pointer<fOptimizer> optim;
@@ -43,4 +44,8 @@ protected:
 	pointer<pRenderer> pR;
 	//pointer<offscreenctx<worker, workerMsg>> octx;
 	function<void(void)> renderF;
+
+	ASize realZ;
+	APoint realP;
+	function<void(APoint, ASize)> viewF;
 };

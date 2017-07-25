@@ -17,7 +17,8 @@
 /*****************************[      autoRenderer       ]*******************************/
 
 aRenderer::aRenderer(AiSize size, AiSize tiles, float maxEffort, float targetFramerate, function<void(void)> renderF) :
-	tiles(tiles), maxEffort(maxEffort), renderF(renderF), windowSize(size), useProgressive(true) {
+	tiles(tiles), maxEffort(maxEffort), renderF(renderF), windowSize(size), useProgressive(true),
+	realZ(0.0f,0.0f), realP(0.0f,0.0f) {
 	tR.reset(new tRenderer(size, tiles, maxEffort));
 
 	texprogram.reset(new shader(mainVertexShader, viewtexture));
@@ -42,12 +43,16 @@ aRenderer::~aRenderer() {
 
 
 void aRenderer::render(int x, int y, bool changed) {
+	fassert(aRenderer::realZ.w != 0.0f); // you must call view before rendering!
+	fassert(aRenderer::realZ.h != 0.0f);
+
 	bool didntUsedProgressive = !useProgressive;
 	useProgressive = !changed;
 
 	// Using the aRender instead of pRender after Changes which will not repeat in the following frames is good, because the aRenderer will present a preview Frame which can be shown while pRender still works on it's first Frame!
 
 	if (aRenderer::useProgressive) {
+		pR->view(aRenderer::realP, aRenderer::realZ, aRenderer::viewF);
 		optim->optimize((sRenderer*)pR.data());
 		pR->render(renderF, didntUsedProgressive);
 		glBindFramebuffer(GL_FRAMEBUFFER, 0);
@@ -56,6 +61,8 @@ void aRenderer::render(int x, int y, bool changed) {
 		pR->draw(x, y);
 	}
 	else {
+		aRenderer::viewF(aRenderer::realP, aRenderer::realZ);
+
 		optim->optimize((sRenderer*)tR.data());
 		while (tR->renderTile([this](ARect tile) -> void { renderF(); })) {
 			glBindFramebuffer(GL_FRAMEBUFFER, 0);
@@ -92,4 +99,18 @@ float aRenderer::getPixelDensity() {
 }
 float aRenderer::getFramerate() {
 	return aRenderer::optim->getFramerate();
+}
+
+void aRenderer::view(APoint pos, ASize zoom, function<void(APoint, ASize)> viewF) {
+	fassert(zoom.w != 0.0f);
+	fassert(zoom.h != 0.0f);
+
+	aRenderer::viewF = viewF;
+
+	if (aRenderer::realZ == ASize(0.0f,0.0f)) {
+		aRenderer::viewF(pos, zoom);
+	}
+
+	aRenderer::realP = pos;
+	aRenderer::realZ = zoom;
 }

@@ -41,18 +41,20 @@ app::app(GLFWwindow *window, nk_context* ctx) :
 	glErrors("app::before");
 	for (size_t p = 0; p < MAX_POLY; p++) coe[p] = coet[p] = 0.0f;
 	
+#if 1
 	coet[0] = -1.0f;
 	coet[1] = -1.0f;
 	coet[4] = 20.0f;
 	coet[7] = 100.0f;
 	coet[44] = 20.0f;
-	
-	/*
+#else
 	coet[0] = -1.0f;
 	coet[7] = 100.0f;
 	coet[977] = 100.0f;
 	coet[1] = -1.0f;
-	*/
+#endif
+
+	for (size_t p = 0; p < MAX_POLY; p++) coe[p] = coet[p];
 
 	app::program.reset(new shader(mainVertexShader, mainFragmentShader));
 	app::uniform.screenTexture = app::program->getUniform("screenTexture");
@@ -74,19 +76,15 @@ app::app(GLFWwindow *window, nk_context* ctx) :
 
 	///////////////////////////
 
-	glGetIntegerv(GL_MAX_TEXTURE_SIZE, &maxTextureSize);
+	glGetIntegerv(GL_MAX_TEXTURE_SIZE, &maxTextureSize); // TODO: Use this information!
 	glErrors("main::getMaxTextureSize");
 
 	////////////////////////////
 
 	glfwGetWindowSize(app::window, &(app::width), &(app::height));
 
-	//app::optim.reset(new fOptimizer(float(app::targetFRate), app::maxDensityI));
 	app::colorMap.reset(new texture(basePath + "res/hue.png"));
-	//app::renderer.reset(new tRenderer(AiSize(app::width, app::height), tiles, app::maxDensityI));
-	//app::progrenderer.reset(new pRenderer(AiSize(app::width, app::height), 1000.0f / app::targetFRate, app::maxDensityI));
-	//app::octx.reset(new offscreenctx<worker, workerMsg>(new worker()));
-
+	
 	app::renderF = [this](void) -> void {
 		//glClear(GL_COLOR_BUFFER_BIT);
 		//glClearColor(0.0f, 0.0f, 1.0f, 1.0f);
@@ -94,8 +92,6 @@ app::app(GLFWwindow *window, nk_context* ctx) :
 		app::program->use();
 
 		glUniform2f(app::uniform.c, cx, cy);
-		glUniform2f(app::uniform.zoom, zoomx, zoomy);
-		glUniform2f(app::uniform.pos, posx, posy);
 		glUniform1i(app::uniform.iter, iter);
 		glUniform1fv(app::uniform.coe, MAX_POLY, coe);
 		glUniform1i(app::uniform.coec, coec);
@@ -129,18 +125,14 @@ void app::keypressed(int key) {
 
 
 void app::reshape(int w, int h) {
-	// TODO: When the application window is scaled while rendering with low framerate (=5) under windows, the application sometimes stops presenting frames anymore!
+	// TODO: When the application window is scaled while rendering with low framerate (<=5) under windows, the application sometimes stops presenting frames anymore!
 	
 	app::width = w;
 	app::height = h;
 	glViewport(0, 0, app::width, app::height);
 
 	app::renderer->setSize(AiSize(app::width, app::height));
-	//app::renderer->setSize(AiSize(app::width, app::height), app::tiles, app::maxDensityI);
-	//app::w->push(sizeChangeMessage(AiSize(app::width, app::height)));
-
-	//app::progrenderer->setSize(AiSize(app::width, app::height), 1000.0f / app::targetFRate, app::maxDensityI);
-
+	app::Change = true;
 
 	glErrors("app::reshape");
 }
@@ -524,7 +516,11 @@ void app::logic() {
 	}
 
 //	coe[1] = (sin(clock() / 10000.0f + 3.16*1) ) * 1.5f + 0.5f;
-
+	app::renderer->view(APoint(app::posx, app::posy), ASize(app::zoomx, app::zoomy), [this](APoint p, ASize z)->void {
+		app::program->use();
+		glUniform2f(app::uniform.zoom, z.w, z.h);
+		glUniform2f(app::uniform.pos, p.x, p.y);
+	});
 
 }
 void app::render() {
@@ -565,7 +561,7 @@ void app::display() {
 	{
 		double xpos, ypos;
 		glfwGetCursorPos(app::window, &xpos, &ypos);
-		app::renderer->render(int(xpos), int(ypos), app::Change || app::pChange);
+		app::renderer->render(int(xpos), int(ypos), app::Change /*|| app::pChange*/);
 	}
 	/*
 	app::texprogram->use();

@@ -10,7 +10,7 @@
 
 #pragma once
 #include "stdafx.h"
-#include "renderer.h"
+#include "tRenderer.h"
 
 
 /////////////////////////////////////////////////////////////////////////////////////////
@@ -33,7 +33,7 @@ public:
 
 
 	void discard();
-	void draw(int x, int y);
+	void draw(int x, int y, ARect tC);
 	void compose();
 	void render(float effort, function<void(void)> renderF);
 
@@ -61,6 +61,8 @@ private:
 	pointer<shader> composer;
 	pointer<shader> white;
 	glLine line;
+
+
 };
 
 
@@ -72,6 +74,8 @@ class pRenderer : public sRenderer {
 public:
 	pRenderer(AiSize size, float maxEffort);
 	~pRenderer();
+
+	void view(APoint pos, ASize zoom, function<void(APoint, ASize)> viewF);
 
 	void render(function<void(void)> renderF, bool discard);
 	void setSize(AiSize size, float maxEffort);
@@ -85,4 +89,11 @@ private:
 	float maxEffort;
 	AiSize size;
 	float effort;
+
+	ASize targetZ, realZ;
+	APoint targetP, realP;
+
+	ASize minQuality;
+
+	bool fresh;
 };

@@ -40,17 +40,6 @@ int _main(int argc, char **argv) {
 				APP->keypressed(key);  
 		});
 
-	/*
-	GLenum glew_status = glewInit();
-		if (glew_status != GLEW_OK) {
-			fatalNote(string("Error: ") + string((const char*)glewGetErrorString(glew_status)));
-		}
-		if (!GLEW_VERSION_2_0) {
-			fatalNote("Error: your graphic card does not support OpenGL 2.0\n");
-		}
-		glErrors("glfw::init");
-		*/
-
 		glbinding::Binding::initialize(false); // only resolve functions that are actually used (lazy)
 		// TODO: Error Checking! Version Checking!
 

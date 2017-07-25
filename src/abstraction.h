@@ -275,6 +275,19 @@ struct ASize {
 	inline ASize operator-(const ASize &div) const {
 		return ASize(ASize::w - div.w, ASize::h - div.h);
 	}
+
+	inline ASize operator/(const float &div) const {
+		return ASize(ASize::w / div, ASize::h / div);
+	}
+	inline ASize operator+(const float &div) const {
+		return ASize(ASize::w + div, ASize::h + div);
+	}
+	inline ASize operator*(const float &div) const {
+		return ASize(ASize::w * div, ASize::h * div);
+	}
+	inline ASize operator-(const float &div) const {
+		return ASize(ASize::w - div, ASize::h - div);
+	}
 };
 typedef ASize APoint;
 
