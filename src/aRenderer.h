@@ -21,7 +21,7 @@
 
 class aRenderer : public ANoncopyable {
 public:
-	aRenderer(AiSize size, AiSize tiles, float maxDensity1D, float targetFramerate, function<void(void)> renderF);
+	aRenderer(AiSize size, AiSize tiles, float maxDensity1D, float targetFramerate, function<void(int)> renderF);
 	~aRenderer();
 	void render(int x, int y, bool changed);
 	void setSize(AiSize size);
@@ -43,7 +43,7 @@ protected:
 	pointer<tRenderer> tR;
 	pointer<pRenderer> pR;
 	//pointer<offscreenctx<worker, workerMsg>> octx;
-	function<void(void)> renderF;
+	function<void(int)> renderF;
 
 	ASize realZ;
 	APoint realP;

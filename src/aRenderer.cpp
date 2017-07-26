@@ -16,7 +16,7 @@
 /////////////////////////////////////////////////////////////////////////////////////////
 /*****************************[      autoRenderer       ]*******************************/
 
-aRenderer::aRenderer(AiSize size, AiSize tiles, float maxDensity1D, float targetFramerate, function<void(void)> renderF) :
+aRenderer::aRenderer(AiSize size, AiSize tiles, float maxDensity1D, float targetFramerate, function<void(int)> renderF) :
 	tiles(tiles), maxDensity1D(maxDensity1D), renderF(renderF), windowSize(size), useProgressive(true),
 	realZ(0.0f,0.0f), realP(0.0f,0.0f), samplesRendered(0) {
 	tR.reset(new tRenderer(size, tiles, maxDensity1D));
@@ -65,7 +65,7 @@ void aRenderer::render(int x, int y, bool changed) {
 
 		optim->optimize((sRenderer*)tR.data(), aRenderer::samplesRendered);
 		aRenderer::samplesRendered = 0;
-		while (tR->renderTile([this](ARect tile) -> void { renderF(); }, aRenderer::samplesRendered)) {
+		while (tR->renderTile([this](ARect tile) -> void { renderF(0); }, aRenderer::samplesRendered)) {
 			glBindFramebuffer(GL_FRAMEBUFFER, 0);
 			glViewport(0, 0, aRenderer::windowSize.w, aRenderer::windowSize.h);
 			texprogram->use();

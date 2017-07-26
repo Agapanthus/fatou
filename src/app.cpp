@@ -21,6 +21,33 @@ static const char *densitySelect[] = { "0.25", "1", "4", "9", "16", "36", "100" 
 static const float densityTable[] = { 0.5f, 1.0f, 2.0f, 3.0f, 4.0f, 6.0f, 10.0f };
 
 
+#ifdef USE_TEXTURE_ARRAY
+const string mainVertexShaderRenamed(
+	"layout (location = 0) in vec2 aPos;"
+	"layout(location = 1) in vec2 aTexCoords;"
+	"out vec2 TexCoordsVs;"
+	"void main() {"
+	"	TexCoordsVs = aTexCoords;"
+	"	gl_Position = vec4(aPos.x, aPos.y, 0.0, 1.0);"
+	"}");
+const string triangleLayerSelector(
+	"uniform int lr;"
+	"in vec2 TexCoordsVs[3];"
+	"out vec2 TexCoords;"
+	"layout(triangles) in;"
+	"layout(triangle_strip, max_vertices = 3) out;"
+	"void main(void) {"
+	"	for (int i = 0; i<gl_in.length(); i++) {"
+	"		TexCoords = TexCoordsVs[i];"
+	"		gl_Layer = lr;"
+	"		gl_Position = gl_in[i].gl_Position;"
+	"		EmitVertex();"
+	"	}"
+	"	EndPrimitive();"
+	"}");
+#endif
+
+
 app::app(GLFWwindow *window, nk_context* ctx) :
 	cx(0.00000001f), cy(3.0f),
 	iter(100),
@@ -56,7 +83,13 @@ app::app(GLFWwindow *window, nk_context* ctx) :
 
 	for (size_t p = 0; p < MAX_POLY; p++) coe[p] = coet[p];
 
+
+#ifdef USE_TEXTURE_ARRAY
+	app::program.reset(new shader(mainVertexShaderRenamed, mainFragmentShader, triangleLayerSelector));
+	app::uniform.layer = app::program->getUniform("lr");
+#else
 	app::program.reset(new shader(mainVertexShader, mainFragmentShader));
+#endif
 	app::uniform.screenTexture = app::program->getUniform("screenTexture");
 	app::uniform.c = app::program->getUniform("c");
 	app::uniform.iter = app::program->getUniform("iter");
@@ -85,7 +118,7 @@ app::app(GLFWwindow *window, nk_context* ctx) :
 
 	app::colorMap.reset(new texture(basePath + "res/hue.png"));
 	
-	app::renderF = [this](void) -> void {
+	app::renderF = [this](int layer) -> void {
 		//glClear(GL_COLOR_BUFFER_BIT);
 		//glClearColor(0.0f, 0.0f, 1.0f, 1.0f);
 
@@ -95,6 +128,9 @@ app::app(GLFWwindow *window, nk_context* ctx) :
 		glUniform1i(app::uniform.iter, iter);
 		glUniform1fv(app::uniform.coe, MAX_POLY, coe);
 		glUniform1i(app::uniform.coec, coec);
+#ifdef USE_TEXTURE_ARRAY
+		glUniform1i(app::uniform.layer, layer);
+#endif
 		glErrors("app::uniform");
 
 		app::colorMap->use(GL_TEXTURE0);

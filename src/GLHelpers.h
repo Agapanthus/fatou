@@ -11,6 +11,10 @@
 #pragma once
 #include "stdafx.h"
 
+
+#define USE_TEXTURE_ARRAY
+
+
 /////////////////////////////////////////////////////////////////////////////////////////
 /*****************************[         Util            ]*******************************/
 
@@ -18,14 +22,14 @@ void glErrors(const char* wheres);
 unsigned int gtimeGet();
 
 // Available GPURAM (for textures) in kilobytes. -1 if unknown.
-int getGPURAM();
+//int getGPURAM();
 
 /////////////////////////////////////////////////////////////////////////////////////////
 /*****************************[         shader          ]*******************************/
 
 class shader {
 public:
-	shader(const string &vertexShader, const string &fragmentShader);
+	shader(const string &vertexShader, const string &fragmentShader, const string &geometryShader = "");
 	~shader();
 	void use();
 	GLint getUniform(const string &name);

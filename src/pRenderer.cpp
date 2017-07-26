@@ -12,57 +12,88 @@
 #include "pRenderer.h"
 #include "data.h"
 
-#define USE_INTERPOLATION
-#define INTERP_POINTS 4
-
-#define MEASURE_PERFORMANCE
 
 // TODO: Check GL / GLSL-Version and support of used functions in the beginning of the program!
 
 /////////////////////////////////////////////////////////////////////////////////////////
 /*****************************[   Progressive Buffer    ]*******************************/
 
-
-
 const string whiteShader("void main() {"
 	"gl_FragColor = vec4(1.0f,1.0f,1.0f,1.0f);"
 	"}");
 
-
 #ifdef USE_INTERPOLATION
 
 const string composerShader(
+#ifdef USE_TEXTURE_ARRAY
+	"uniform sampler2DArray tex;"
+#else
 	"uniform sampler3D tex;"
+#endif
 	// x are iterations and y*INTERP_POINTS are layers. Those INTERP_POINTS Pixels are each one point to use for interpolation:
 	// (coordinate.x, coordinate.y, layer, weight)
 	// If pixel[0].weight == 0.0f, then the value of the first Position should be copied without interpolation.
 	"uniform sampler2D interPM;"
 	"in vec2 TexCoords;"
-	"uniform int iteration;"
 	"uniform int queue_r;"
 	"layout(pixel_center_integer) in vec4 gl_FragCoord;"
-	
+
+#ifdef USE_TEXEL_FETCH
+	"uniform int iteration;"
+#else
+	"uniform float inverse_queue_l_minus_one;"
+	"uniform float iteration;"
+#endif
 
 	"void main() {"
 	"	int x = int(gl_FragCoord.x) % queue_r;"
 	"	int y = int(gl_FragCoord.y) % queue_r;"
+#ifdef USE_TEXEL_FETCH
 	"	int layerAddress = (x + (queue_r*y)) * " + toString(INTERP_POINTS) + ";"
 	"	vec4 p1 = texelFetch(interPM, ivec2(iteration, layerAddress), 0);"
+#else
+	//"	float layerAddress = (x + (queue_r*y)) * inverse_queue_l_minus_one;"
+	"	float layerAddress = (x + (queue_r*y)) / (24);"
+	"	vec4 p1 = texture(interPM, vec2(iteration, layerAddress), 0);"
+#endif
 	// We don't need that. Due to lower resolution, sampler3D with GL_NEAREST does this automatically!
 	//"	vec2 offset = vec2(TexCoords.x - (float(x) * iWinSize.x), TexCoords.y - (float(y) * iWinSize.y) );"
 	// Just load the Pixel
+#ifndef DISABLE_BRANCHING
 	"	if(p1[3] == 0.0f) {"
 	"		gl_FragColor = texture(tex, vec3(TexCoords.x + p1[0], TexCoords.y + p1[1], p1[2]));"
 	// Interpolate Pixels
 	"	} else {"
+#endif
+#ifdef USE_TEXEL_FETCH
 	"		vec4 p2 = texelFetch(interPM, ivec2(iteration, layerAddress+1), 0);"
 	"		vec4 p3 = texelFetch(interPM, ivec2(iteration, layerAddress+2), 0);"
 	"		vec4 p4 = texelFetch(interPM, ivec2(iteration, layerAddress+3), 0);"
+#else
+	"		float layerStep = inverse_queue_l_minus_one / " + toString(INTERP_POINTS) + ";"
+	"		vec4 p2 = texture(interPM, vec2(iteration, layerStep   + layerAddress), 0);"
+	"		vec4 p3 = texture(interPM, vec2(iteration, layerStep*2 + layerAddress), 0);"
+	"		vec4 p4 = texture(interPM, vec2(iteration, layerStep*3 + layerAddress), 0);"
+#endif
+#ifdef USE_DOTPRODUCT
+	"		vec4 weights = vec4(p1[3], p2[3], p3[3], p4[3]);"
+	"		vec4 t1 = texture(tex, vec3(TexCoords.x + p1[0], TexCoords.y + p1[1], p1[2]));"
+	"		vec4 t2 = texture(tex, vec3(TexCoords.x + p2[0], TexCoords.y + p2[1], p2[2]));"
+	"		vec4 t3 = texture(tex, vec3(TexCoords.x + p3[0], TexCoords.y + p3[1], p3[2]));"
+	"		vec4 t4 = texture(tex, vec3(TexCoords.x + p4[0], TexCoords.y + p4[1], p4[2]));"
+	"		vec4 valuesr = vec4(t1.r, t2.r, t3.r, t4.r);"
+	"		vec4 valuesg = vec4(t1.g, t2.g, t3.g, t4.g);"
+	"		vec4 valuesb = vec4(t1.b, t2.b, t3.b, t4.b);"
+	"		gl_FragColor = vec4( dot(weights, valuesr), dot(weights, valuesg), dot(weights, valuesb), 1.0f);"
+#else
 	"		gl_FragColor =vec4( (p1[3] * texture(tex, vec3(TexCoords.x + p1[0], TexCoords.y + p1[1], p1[2])).xyz)"
 	"					+ (p2[3] * texture(tex, vec3(TexCoords.x + p2[0], TexCoords.y + p2[1], p2[2])).xyz)"
 	"					+ (p3[3] * texture(tex, vec3(TexCoords.x + p3[0], TexCoords.y + p3[1], p3[2])).xyz)"
 	"					+ (p4[3] * texture(tex, vec3(TexCoords.x + p4[0], TexCoords.y + p4[1], p4[2])).xyz), 1.0f);"
+#endif
+#ifndef DISABLE_BRANCHING
 	"	}"
+#endif
 	"}");
 
 #else
@@ -94,7 +125,11 @@ const string composerShader(
 
 // New, faster Version
 const string composerShader(
+#ifdef USE_TEXTURE_ARRAY
+	"uniform sampler2DArray tex;"
+#else
 	"uniform sampler3D tex;"
+#endif
 	"in vec2 TexCoords;"
 	"uniform float queue_l;"
 	"uniform float maxZ;"
@@ -104,21 +139,17 @@ const string composerShader(
 	"void main() {"
 	"	int x = int(gl_FragCoord.x) % queue_r;"
 	"	int y = int(gl_FragCoord.y) % queue_r;"
+#ifdef USE_TEXTURE_ARRAY
+	"	float layer = queue_l*maxZ;"
+	"	layer = (x + (queue_r*y));"
+#else
 	"	float layer = (x + (queue_r*y)) / (queue_l-1);"
 	"	if(layer > maxZ) layer = maxZ;"
+#endif
 	"	gl_FragColor = texture(tex, vec3(TexCoords.x , TexCoords.y, layer));\n"
 	"}");
 
 #endif
-
-int roundUpToNextMultipleOfN(int numToRound, int N) {
-	if (N == 0)
-		return numToRound;
-	int remainder = numToRound % N;
-	if (remainder == 0)
-		return numToRound;
-	return numToRound + N - remainder;
-}
 
 pBuffer::pBuffer(AiSize size) :
 	syncBuffer(size, false, GL_LINEAR, GL_LINEAR), size(0, 0) {
@@ -131,9 +162,10 @@ pBuffer::pBuffer(AiSize size) :
 	fatalNote("GPU doesn't support " << QUEUE_LENGTH << " textures per fragment shader");
 	}*/
 
-	white.reset(new shader(mainVertexShader, whiteShader));
-
+	pBuffer::white.reset(new shader(mainVertexShader, whiteShader));
+	
 	pBuffer::composer.reset(new shader(mainVertexShader, composerShader));
+
 
 	pBuffer::composer->use();
 	uniform.texture = pBuffer::composer->getUniform("tex");
@@ -148,6 +180,9 @@ pBuffer::pBuffer(AiSize size) :
 	//uniform.winSize = pBuffer::composer->getUniform("winSize");
 	uniform.maxZ = pBuffer::composer->getUniform("maxZ");
 	uniform.queue_l = pBuffer::composer->getUniform("queue_l");
+#endif
+#ifndef USE_TEXEL_FETCH
+	uniform.inverse_queue_l_minus_one = pBuffer::composer->getUniform("inverse_queue_l_minus_one");
 #endif
 	glUniform1i(uniform.texture, 0);
 
@@ -187,11 +222,15 @@ void pBuffer::scale(AiSize size) {
 }
 
 inline float normLayer(float l) {
+#ifdef USE_TEXTURE_ARRAY
+	return l;
+#else
 	float layer = l / float(QUEUE_LENGTH - 1);
 	// Very strange thing, but sampler3d returns all zero for z==1.0f...
 	//if (layer == 1.0f) layer = 0.999999f; 
 	// (Instead, I'm using GL_CLAMP_TO_EDGE for now.)
 	return layer;
+#endif
 }
 
 inline float netDistance(const AiSize &tile, const AiPoint &a, const AiPoint &b, ASize &relative) {
@@ -219,7 +258,6 @@ inline float netDistance(const AiSize &tile, const AiPoint &a, const AiPoint &b,
 	fassert((dist - (tile / 2)).magnitude() <= AiSize(QUEUE_LENGTH_X, QUEUE_LENGTH_Y).magnitude());
 	return (dist - (tile / 2)).magnitude();
 }
-
 
 // TODO: Make it use other equivalent points from other tiles, when there are less than INTERP_POINTS samples!
 // TODO: Do this asynchronously!
@@ -300,7 +338,15 @@ void pBuffer::recalculateCoeff() {
 
 
 			} else {
-				coeffBuffer->set(i, permutationMap[l]*INTERP_POINTS + 0, 0.0f, 0.0f, normLayer(float(permutationMap[l])), 0.0f);
+#ifdef DISABLE_BRANCHING
+				coeffBuffer->set(i, permutationMap[l]*INTERP_POINTS + 0, 0.0f, 0.0f, normLayer(float(permutationMap[l])), 1.0f);
+				coeffBuffer->set(i, permutationMap[l] * INTERP_POINTS + 1, 0.0f, 0.0f, normLayer(float(permutationMap[l])), 0.0f);
+				coeffBuffer->set(i, permutationMap[l] * INTERP_POINTS + 2, 0.0f, 0.0f, normLayer(float(permutationMap[l])), 0.0f);
+				coeffBuffer->set(i, permutationMap[l] * INTERP_POINTS + 3, 0.0f, 0.0f, normLayer(float(permutationMap[l])), 0.0f);
+#else
+				coeffBuffer->set(i, permutationMap[l] * INTERP_POINTS + 0, 0.0f, 0.0f, normLayer(float(permutationMap[l])), 0.0f);
+#endif
+
 			}
 			//}
 
@@ -373,7 +419,8 @@ void pBuffer::draw(int x, int y, ARect t) {
 	}
 #endif
 }
-uint64 pBuffer::render(uint64 inSamples, function<void(void)> renderF) {
+
+uint64 pBuffer::render(uint64 inSamples, function<void(int)> renderF) {
 	int64 samplesLeft = inSamples;
 	bool changed = false;
 #ifdef MEASURE_PERFORMANCE
@@ -401,7 +448,7 @@ uint64 pBuffer::render(uint64 inSamples, function<void(void)> renderF) {
 			delta = delta / ASize(buffer->getSize());
 
 			buffer->writeTo(permutationMap[pBuffer::currentBuffer]);
-			renderF();
+			renderF(permutationMap[pBuffer::currentBuffer]);
 			quad.draw(part, partT + delta);
 
 			if (posxnew == buffer->getSize().w) {
@@ -436,9 +483,14 @@ void pBuffer::compose() {
 	syncBuffer::writeTo([this](void)->void {
 		composer->use();
 #ifdef USE_INTERPOLATION
-		glUniform1i(uniform.iteration, maximum(0, int32(pBuffer::currentBuffer) - 1)); //  minimum(24U, pBuffer::currentBuffer));
-	//	cout << currentBuffer << endl;
 	//	glUniform2f(uniform.iWinSize, 1.0f/size.w, 1.0f/size.h);
+#ifdef USE_TEXEL_FETCH
+		glUniform1i(uniform.iteration, maximum(0, int32(pBuffer::currentBuffer) - 1));
+#else
+		glUniform1f(uniform.iteration, maximum(0.0f, float(pBuffer::currentBuffer) - 1) / float(QUEUE_LENGTH));
+	//	cout << maximum(0.0f, float(pBuffer::currentBuffer) - 1) / float(QUEUE_LENGTH) << endl;
+		glUniform1f(uniform.inverse_queue_l_minus_one, 1.0f / float(QUEUE_LENGTH - 1));
+#endif
 #else
 		glUniform1f(uniform.maxZ, maximum(0, int32(pBuffer::currentBuffer) - 1) / maximum(1.0f, float(QUEUE_LENGTH)));
 		glUniform1f(uniform.queue_l, float(QUEUE_LENGTH));
@@ -476,7 +528,7 @@ pRenderer::~pRenderer() {
 
 }
 
-uint64 pRenderer::render(function<void(void)> renderF, bool discard) {
+uint64 pRenderer::render(function<void(int)> renderF, bool discard) {
 	if(discard)	buffer->discard();
 	return buffer->render(pRenderer::samples, renderF);
 }
@@ -499,8 +551,8 @@ void pRenderer::draw(int x, int y) {
 	ASize t2_11((targetZ * (0.5f) + targetP - realP) / realZ + 0.5f);
 	ARect tC(t2_00.w, t2_00.h, t2_11.w, t2_11.h);
 	buffer->draw(x, y, tC);
+	// TODO: Improve drawing! We need the algorithm to pre-downscale the buffer when density > 4.0
 }
-
 void pRenderer::view(APoint pos, ASize zoom, function<void(APoint, ASize)> viewF) {
 	// TODO: Zwei Puffer! Den zweiten erst zeigen, sobald der neue besser als der alte ist! Dadurch auch das Ruckeln entfernen!
 	// TODO: Wenn am Rand was gebraucht wird, nur diesen Randbereich neurendern!

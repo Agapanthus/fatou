@@ -12,12 +12,21 @@
 #include "stdafx.h"
 #include "tRenderer.h"
 
+//#define DISABLE_BRANCHING
+//#define USE_DOTPRODUCT
+#define USE_TEXEL_FETCH // Disabling this is not implemented!
+
+#define USE_INTERPOLATION
+#define INTERP_POINTS 4
+
+#define MEASURE_PERFORMANCE
+
 
 /////////////////////////////////////////////////////////////////////////////////////////
 /*****************************[   Progressive Buffer    ]*******************************/
 
 // TODO: increasing QUEUE_LENGTH has SIGNIFICANT negative effect on rendering time! Why and how to solve that?! (--> Seems to be due to frequent FBO binds...)
-#define QUEUE_LENGTH_R 5
+#define QUEUE_LENGTH_R 10
 #define QUEUE_LENGTH_X QUEUE_LENGTH_R
 #define QUEUE_LENGTH_Y QUEUE_LENGTH_R
 // TODO: Implement X != Y
@@ -35,11 +44,12 @@ public:
 	void discard();
 	void draw(int x, int y, ARect tC);
 	void compose();
-	uint64 render(uint64 samples, function<void(void)> renderF);
+	uint64 render(uint64 samples, function<void(int)> renderF);
 
 private:
 	//vector<pointer<syncBuffer>> buffers;
 	//GLuint queries[QUEUE_LENGTH];
+
 	pointer<syncBuffer3d> buffer;
 
 	vector<int32> permutationMap;
@@ -50,6 +60,7 @@ private:
 	struct {
 		GLuint texture, queue_l , queue_r, maxZ, interPM, iteration, iWinSize;
 		//GLuint winSize, scale;
+		GLuint inverse_queue_l_minus_one;
 	} uniform;
 
 	sQuad quad;
@@ -77,7 +88,7 @@ public:
 
 	void view(APoint pos, ASize zoom, function<void(APoint, ASize)> viewF);
 
-	uint64 render(function<void(void)> renderF, bool discard);
+	uint64 render(function<void(int)> renderF, bool discard);
 	void setSize(AiSize size, float maxDensity1D);
 
 	void setSampleCount(uint64 samples);

@@ -68,7 +68,7 @@ void debugShader(GLuint res) {
 	throw runtime_error("Failed to compile shader");
 }
 
-shader::shader(const string &vertexShader, const string &fragmentShader) {
+shader::shader(const string &vertexShader, const string &fragmentShader, const string &geometryShader) {
 	glErrors("shader::before");
 	shader::program = glCreateProgram();
 	
@@ -76,6 +76,13 @@ shader::shader(const string &vertexShader, const string &fragmentShader) {
 	if (!vshader)
 		throw runtime_error("Failed to load vertex shader");
 	glAttachShader(shader::program, vshader);
+
+	if (geometryShader.length() > 0) {
+		GLuint gshader = shader::upload(geometryShader, GL_GEOMETRY_SHADER);
+		if (!gshader)
+			throw runtime_error("Failed to load geometry shader");
+		glAttachShader(shader::program, gshader);
+	}
 	
 	GLuint fshader = shader::upload(fragmentShader, GL_FRAGMENT_SHADER);
 	if (!fshader)
@@ -414,8 +421,45 @@ AiSize floatStorage::getSize() {
 syncBuffer3d::syncBuffer3d(AiSize iSize, uint32 depth, GLenum quality, GLenum qualityM) :
 	iSize(iSize), depth(depth), quality(quality) {
 	syncBuffer3d::framebuffers = new GLuint[syncBuffer3d::depth];
+
+#ifdef USE_TEXTURE_ARRAY
+	glGenFramebuffers(1, framebuffers);
+
+	glActiveTexture(GL_TEXTURE0);
+	glGenTextures(1, &(syncBuffer3d::tex));
+	glBindTexture(GL_TEXTURE_2D_ARRAY, syncBuffer3d::tex);
+	glErrors("syncBuffer3D::bind");
+	glTexImage3D(GL_TEXTURE_2D_ARRAY, 0, GL_RGB, syncBuffer3d::iSize.w, syncBuffer3d::iSize.h, syncBuffer3d::depth,	0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
+	/*glTexStorage3D(GL_TEXTURE_2D_ARRAY, 1, GL_RGB8, syncBuffer3d::iSize.w, syncBuffer3d::iSize.h, syncBuffer3d::depth);
+	glErrors("syncBuffer3D::storage");
+	for (size_t i = 0; i < syncBuffer3d::depth; i++) {
+		glTexSubImage3D(GL_TEXTURE_2D_ARRAY, 0, 0, 0, i, syncBuffer3d::iSize.w, syncBuffer3d::iSize.h, 1, GL_RGB, GL_UNSIGNED_BYTE, nullptr); 
+	}*/
+	glErrors("syncBuffer3D::Allocate");
+	glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MAG_FILTER, qualityM);
+	glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MIN_FILTER, quality);
+	glErrors("syncBuffer3D::createTexture2DArray");
+
+	glBindFramebuffer(GL_FRAMEBUFFER, framebuffers[0]);
+	//glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, syncBuffer::tex, 0);
+	//glFramebufferTexture3D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D_ARRAY, syncBuffer3d::tex, 0, 0);
+	glFramebufferTexture(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, syncBuffer3d::tex, 0);
+/*	glFramebufferTextureLayer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, syncBuffer3d::tex, 0, 0);
+	glFramebufferTextureLayer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT1, syncBuffer3d::tex, 0, 1);
+	glFramebufferTextureLayer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT2, syncBuffer3d::tex, 0, 2);
+	glFramebufferTextureLayer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT3, syncBuffer3d::tex, 0, 3);*/
+	/*for (size_t i = 0; i < syncBuffer3d::depth; i++) {
+		fassert(GL_COLOR_ATTACHMENT0 == GL_COLOR_ATTACHMENT0EXT); // Otherwise, just adding the index won't work!
+		glFramebufferTextureLayer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0 + i, syncBuffer3d::tex, 0, i);
+	}*/
+	glErrors("syncBuffer3D::FramebufferTexture");
+	//glFramebufferTextureLayer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, syncBuffer3d::tex, 0, i);
+	if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
+		fatalNote("Framebuffer (Framebuffer texture 3d) is not complete!");
+#else
 	glGenFramebuffers(depth, framebuffers);
-//	glBindFramebuffer(GL_FRAMEBUFFER, framebuffers);
 
 	glGenTextures(1, &(syncBuffer3d::tex));
 	glBindTexture(GL_TEXTURE_3D, syncBuffer3d::tex);
@@ -433,31 +477,52 @@ syncBuffer3d::syncBuffer3d(AiSize iSize, uint32 depth, GLenum quality, GLenum qu
 		if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
 			fatalNote("Framebuffer is not complete!");
 	}
+#endif
+
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 	glErrors("syncBuffer3d::construct");
 }
 void syncBuffer3d::scale(AiSize iSize) {
 	syncBuffer3d::iSize = iSize;
+	
+#ifdef USE_TEXTURE_ARRAY
+	glBindTexture(GL_TEXTURE_2D_ARRAY, syncBuffer3d::tex);
+	glTexImage3D(GL_TEXTURE_2D_ARRAY, 0, GL_RGB, syncBuffer3d::iSize.w, syncBuffer3d::iSize.h, syncBuffer3d::depth, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
 
+#else
 	glBindTexture(GL_TEXTURE_3D, syncBuffer3d::tex);
 	glTexImage3D(GL_TEXTURE_3D, 0, GL_RGB, syncBuffer3d::iSize.w, syncBuffer3d::iSize.h, syncBuffer3d::depth, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
+#endif
 
 	glErrors("syncBuffer3d::scale");
 }
 syncBuffer3d::~syncBuffer3d() {
 	glDeleteTextures(1, &(syncBuffer3d::tex));
+
+#ifdef USE_TEXTURE_ARRAY
+	glDeleteFramebuffers(1, syncBuffer3d::framebuffers);
+#else
 	glDeleteFramebuffers(syncBuffer3d::depth, syncBuffer3d::framebuffers);
+#endif
 	delete[] syncBuffer3d::framebuffers;
 	glErrors("syncBuffer3d::destruct");
 }
 void syncBuffer3d::writeTo(uint32 layer) {
+#ifdef USE_TEXTURE_ARRAY
+	glBindFramebuffer(GL_FRAMEBUFFER, syncBuffer3d::framebuffers[0]);
+#else
 	glBindFramebuffer(GL_FRAMEBUFFER, syncBuffer3d::framebuffers[layer]);
+#endif
 	glViewport(0, 0, syncBuffer3d::iSize.w, syncBuffer3d::iSize.h);
 	glErrors("syncBuffer3d::writeTo");
 }
 void syncBuffer3d::bind(GLenum textureID) {
 	glActiveTexture(textureID);
+#ifdef USE_TEXTURE_ARRAY
+	glBindTexture(GL_TEXTURE_2D_ARRAY, syncBuffer3d::tex);
+#else
 	glBindTexture(GL_TEXTURE_3D, syncBuffer3d::tex);
+#endif
 	glErrors("syncBuffer3d::bind");
 }
 AiSize syncBuffer3d::getSize() {

@@ -56,6 +56,7 @@ private:
 	int targetFRate;
 	struct {
 		GLint iter, screenTexture, c, zoom, pos, coec, coe;
+		GLint layer;
 	} uniform;
 
 	float cx, cy, zoomx, zoomy, zoom, posx, posy;
@@ -73,7 +74,7 @@ private:
 	int width, height;
 	GLint maxTextureSize;
 	bool isFullscreen;
-	function<void(void)> renderF;
+	function<void(int)> renderF;
 	bool Change; // Parameters changed
 	bool pChange; // Position / Zoom changed
 
