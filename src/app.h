@@ -14,6 +14,8 @@
 #include "GLHelpers.h"
 #include "aRenderer.h"
 #include "data.h"
+#include "parallelctx.h"
+#include "worker.h"
 
 
 /////////////////////////////////////////////////////////////////////////////////////////
@@ -50,6 +52,8 @@ private:
 	AiSize tiles;
 	pointer<aRenderer> renderer;
 
+	pointer<offscreenctx<worker, workerMsg>> offscrctx;
+	pointer<shader> texprogram;
 
 	///////////////////// Parameters
 

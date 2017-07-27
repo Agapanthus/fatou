@@ -54,7 +54,7 @@ void aRenderer::render(int x, int y, bool changed) {
 	if (aRenderer::useProgressive) {
 		pR->view(aRenderer::realP, aRenderer::realZ, aRenderer::viewF);
 		optim->optimize((sRenderer*)pR.data(), aRenderer::samplesRendered);
-		aRenderer::samplesRendered = pR->render(renderF, didntUsedProgressive);
+		aRenderer::samplesRendered = 0; // pR->render(renderF, didntUsedProgressive);
 		glBindFramebuffer(GL_FRAMEBUFFER, 0);
 		glViewport(0, 0, aRenderer::windowSize.w, aRenderer::windowSize.h);
 		texprogram->use();
@@ -82,7 +82,9 @@ void aRenderer::setSize(AiSize size) {
 		aRenderer::tR->setSize(size, tiles, aRenderer::maxDensity1D);
 	}
 	windowSize = size;	
-	aRenderer::optim->hint(float(windowSize.w*windowSize.h) / (size.w*size.h)); // TODO: This won't work properly when maximizing a window with degree 200 polynomials inside!
+
+	// Obsolete
+//	aRenderer::optim->hint(float(windowSize.w*windowSize.h) / (size.w*size.h)); // TODO: This won't work properly when maximizing a window with degree 200 polynomials inside!
 }
 
 void aRenderer::setMaxEffort(float maxDensity1D) {
@@ -96,7 +98,12 @@ void aRenderer::setTargetFramerate(float framerate) {
 }
 
 float aRenderer::getDensity1D() {
-	return float(sqrt(double(aRenderer::optim->getSamples()) / double(aRenderer::windowSize.area())));
+	if (aRenderer::useProgressive) {
+		return sqrt(aRenderer::pR->getProgress()) * aRenderer::maxDensity1D;
+	}
+	else {
+		return float(sqrt(double(aRenderer::optim->getSamples()) / double(aRenderer::windowSize.area())));
+	}
 }
 float aRenderer::getFramerate() {
 	return aRenderer::optim->getFramerate();
@@ -114,4 +121,7 @@ void aRenderer::view(APoint pos, ASize zoom, function<void(APoint, ASize)> viewF
 
 	aRenderer::realP = pos;
 	aRenderer::realZ = zoom;
+}
+uint64 aRenderer::getSamplesPerFrame() {
+	return aRenderer::samplesRendered; // optim->getSamples();
 }

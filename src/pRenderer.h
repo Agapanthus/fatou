@@ -19,14 +19,14 @@
 #define USE_INTERPOLATION
 #define INTERP_POINTS 4
 
-#define MEASURE_PERFORMANCE
+//#define MEASURE_PERFORMANCE
 
 
 /////////////////////////////////////////////////////////////////////////////////////////
 /*****************************[   Progressive Buffer    ]*******************************/
 
 // TODO: increasing QUEUE_LENGTH has SIGNIFICANT negative effect on rendering time! Why and how to solve that?! (--> Seems to be due to frequent FBO binds...)
-#define QUEUE_LENGTH_R 10
+#define QUEUE_LENGTH_R 4
 #define QUEUE_LENGTH_X QUEUE_LENGTH_R
 #define QUEUE_LENGTH_Y QUEUE_LENGTH_R
 // TODO: Implement X != Y
@@ -41,8 +41,10 @@ public:
 	void scale(AiSize size); 
 
 
+	float getProgress();
 	void discard();
 	void draw(int x, int y, ARect tC);
+	ARect drawExternal(ARect t);
 	void compose();
 	uint64 render(uint64 samples, function<void(int)> renderF);
 
@@ -94,6 +96,8 @@ public:
 	void setSampleCount(uint64 samples);
 	uint64 getSampleCount() const;
 	void draw(int x, int y);
+	ARect drawExternal();
+	float getProgress();
 
 	AiSize getSize() const;
 

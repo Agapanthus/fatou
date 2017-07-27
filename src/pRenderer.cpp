@@ -24,6 +24,8 @@ const string whiteShader("void main() {"
 
 #ifdef USE_INTERPOLATION
 
+// TODO: This is by far to slow! -> TexelFetch is much slower than texture!
+
 const string composerShader(
 #ifdef USE_TEXTURE_ARRAY
 	"uniform sampler2DArray tex;"
@@ -317,7 +319,7 @@ void pBuffer::recalculateCoeff() {
 						}
 					}
 					// Result will depend exponentially on the distance and longer distances give smaller relevances
-					points[p].relevance = pow( 3.0f - 2.0 * sqrt(i / float(QUEUE_LENGTH)), -points[p].dist);
+					points[p].relevance = pow( 3.0f - 2.0f * sqrt(i / float(QUEUE_LENGTH)), -points[p].dist);
 					// zero should stay zero
 					if (points[p].dist == 0.0f) points[p].relevance = 0.0f;
 				}
@@ -359,11 +361,18 @@ void pBuffer::recalculateCoeff() {
 	coeffBuffer->upload();
 }
 
+ARect pBuffer::drawExternal(ARect t) {
+	if (pBuffer::currentBuffer > 0) {
+		syncBuffer::readFrom();
+		return t;
+	}
+	return ARect(0.0f);
+}
+
 void pBuffer::draw(int x, int y, ARect t) {
 	// TODO: You should always draw!
 	if (pBuffer::currentBuffer > 0) {
 		syncBuffer::readFrom();
-		ARect e(0.0f, 0.0f, 1.0f, 1.0f);
 		pBuffer::quad.draw(ARect(0.0f, 0.0f, 1.0f, 1.0f), t );
 	}
 	
@@ -423,11 +432,19 @@ void pBuffer::draw(int x, int y, ARect t) {
 uint64 pBuffer::render(uint64 inSamples, function<void(int)> renderF) {
 	int64 samplesLeft = inSamples;
 	bool changed = false;
+
+	//static double timeAll;
 #ifdef MEASURE_PERFORMANCE
 	glQueryCreator gqt;
 	{
 		glQuery q = gqt.create();
 #endif
+
+#ifdef USE_TEXTURE_ARRAY
+		buffer->writeTo(0);
+#endif
+
+		bool first = true;
 
 		while (samplesLeft > 0) {
 			if (pBuffer::currentBuffer == QUEUE_LENGTH) break;
@@ -435,8 +452,12 @@ uint64 pBuffer::render(uint64 inSamples, function<void(int)> renderF) {
 			uint32 posxnew = minimum(uint32(buffer->getSize().w), posx + uint32(round(double(samplesLeft) / double(buffer->getSize().h))));
 
 			if (posxnew == posx) {
-				break;
+				if (first) {
+					first = false;
+					posxnew++;
+				}else break;
 			}
+
 			ASize ratio(ASize(buffer->getSize() * QUEUE_LENGTH_R) / ASize(size));
 			ARect part(float(posx) / float(buffer->getSize().w), 0.0f, float(posxnew) / float(buffer->getSize().w), 1.0f);
 			ARect partT = part * ASize(ratio.w, ratio.h);
@@ -447,7 +468,9 @@ uint64 pBuffer::render(uint64 inSamples, function<void(int)> renderF) {
 				((permutationMap[pBuffer::currentBuffer] / QUEUE_LENGTH_R) + 0.5f) / float(QUEUE_LENGTH_R) - 0.5f);
 			delta = delta / ASize(buffer->getSize());
 
+#ifndef USE_TEXTURE_ARRAY
 			buffer->writeTo(permutationMap[pBuffer::currentBuffer]);
+#endif
 			renderF(permutationMap[pBuffer::currentBuffer]);
 			quad.draw(part, partT + delta);
 
@@ -460,19 +483,29 @@ uint64 pBuffer::render(uint64 inSamples, function<void(int)> renderF) {
 		}
 #ifdef MEASURE_PERFORMANCE
 	}
-	if(changed)	cout << "Render: " << gqt.getTime() << " ms   ";
+	double t = gqt.getTime();
+	//timeAll += t;
+//	if(changed)	cout << "Render: " << t << " ms   ";
 	{
-		glQuery q = gqt.create();
+//		glQuery q = gqt.create();
 #endif
-		// TODO: Improve performance by using Array Textures with Geometry shader (No FBO's!), not using Texel Fetch and composing less! 
-		if (changed) // TODO: Composing is quite time consuming... Maybe it's a good idea to give some option like "compose at most 3 times per second" (HINT: Composing 4k takes between 8 and 60 ms on my Thinkpad T540p, depending on the number of layers and the number of interpolated texels)
+		
+		// TODO: Improve performance by not using Texel Fetch and composing less often!
+		if (changed) { // TODO: Composing is quite time consuming... Maybe it's a good idea to give some option like "compose at most 3 times per second" (HINT: Composing 4k takes between 8 and 60 ms on my Thinkpad T540p, depending on the number of layers and the number of interpolated texels)
 			pBuffer::compose();
+		}
 
 #ifdef MEASURE_PERFORMANCE
 	}
-	if (changed) cout << "Compose: " << gqt.getTime() << " ms" << endl;
+	//if (changed) cout << "Compose: " << gqt.getTime() << " ms" << endl;
+
+	/*if (changed && currentBuffer == QUEUE_LENGTH) {
+		cout << "Rendering took: " << timeAll << " ms" << endl;
+		timeAll = 0;
+	}*/
 #endif
-	
+
+
 	return inSamples - samplesLeft;
 }
 void pBuffer::compose() {
@@ -517,6 +550,10 @@ void pBuffer::discard() {
 	pBuffer::currentBuffer = 0;
 }
 
+float pBuffer::getProgress() {
+	return float(pBuffer::currentBuffer) / float(QUEUE_LENGTH);
+}
+
 /////////////////////////////////////////////////////////////////////////////////////////
 /*****************************[   Progressive Renderer  ]*******************************/
 
@@ -546,12 +583,20 @@ uint64 pRenderer::getSampleCount() const {
 	return pRenderer::samples;
 }
 void pRenderer::draw(int x, int y) {
+	fassert(realZ != ASize(0.0f,0.0f));
+	fassert(targetZ != ASize(0.0f, 0.0f));
 	// Solving z2 * (t1 - 0.5) + p2 = z1 * (t2 - 0.5) + p1 for t2 with t1 = (0,0) or t2 = (1,1)
 	ASize t2_00((targetZ * (-0.5f) + targetP - realP) / realZ + 0.5f);
 	ASize t2_11((targetZ * (0.5f) + targetP - realP) / realZ + 0.5f);
 	ARect tC(t2_00.w, t2_00.h, t2_11.w, t2_11.h);
 	buffer->draw(x, y, tC);
 	// TODO: Improve drawing! We need the algorithm to pre-downscale the buffer when density > 4.0
+}
+ARect pRenderer::drawExternal() {
+	ASize t2_00((targetZ * (-0.5f) + targetP - realP) / realZ + 0.5f);
+	ASize t2_11((targetZ * (0.5f) + targetP - realP) / realZ + 0.5f);
+	ARect tC(t2_00.w, t2_00.h, t2_11.w, t2_11.h);
+	return buffer->drawExternal(tC);
 }
 void pRenderer::view(APoint pos, ASize zoom, function<void(APoint, ASize)> viewF) {
 	// TODO: Zwei Puffer! Den zweiten erst zeigen, sobald der neue besser als der alte ist! Dadurch auch das Ruckeln entfernen!
@@ -604,4 +649,7 @@ void pRenderer::view(APoint pos, ASize zoom, function<void(APoint, ASize)> viewF
 
 AiSize pRenderer::getSize() const {
 	return pRenderer::size;
+}
+float pRenderer::getProgress() {
+	return buffer->getProgress();
 }

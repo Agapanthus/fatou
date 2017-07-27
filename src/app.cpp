@@ -15,37 +15,10 @@
 /////////////////////////////////////////////////////////////////////////////////////////
 /*****************************[           app           ]*******************************/
 
-unsigned int MaxFRate = 67;
+unsigned int MaxFRate =  67;
 
 static const char *densitySelect[] = { "0.25", "1", "4", "9", "16", "36", "100" };
 static const float densityTable[] = { 0.5f, 1.0f, 2.0f, 3.0f, 4.0f, 6.0f, 10.0f };
-
-
-#ifdef USE_TEXTURE_ARRAY
-const string mainVertexShaderRenamed(
-	"layout (location = 0) in vec2 aPos;"
-	"layout(location = 1) in vec2 aTexCoords;"
-	"out vec2 TexCoordsVs;"
-	"void main() {"
-	"	TexCoordsVs = aTexCoords;"
-	"	gl_Position = vec4(aPos.x, aPos.y, 0.0, 1.0);"
-	"}");
-const string triangleLayerSelector(
-	"uniform int lr;"
-	"in vec2 TexCoordsVs[3];"
-	"out vec2 TexCoords;"
-	"layout(triangles) in;"
-	"layout(triangle_strip, max_vertices = 3) out;"
-	"void main(void) {"
-	"	for (int i = 0; i<gl_in.length(); i++) {"
-	"		TexCoords = TexCoordsVs[i];"
-	"		gl_Layer = lr;"
-	"		gl_Position = gl_in[i].gl_Position;"
-	"		EmitVertex();"
-	"	}"
-	"	EndPrimitive();"
-	"}");
-#endif
 
 
 app::app(GLFWwindow *window, nk_context* ctx) :
@@ -57,24 +30,29 @@ app::app(GLFWwindow *window, nk_context* ctx) :
 	lastTime(UINT32_MAX),
 	window(window), ctx(ctx),
 	navigationMode(navigation_lrclick_combi),
-	supers(1.0f), tiles(1,1),
+	supers(1.0f), tiles(1, 1),
 	targetFRate(25),
 	biasPower(-40), show_about(false), isFullscreen(false),
 	show_polynomial(true),
 	trace_length(0), show_roots(false), show_tooltips(true),
 	maxDensity(2), maxDensityI(densityTable[maxDensity])
 {
+	offscrctx.reset(new offscreenctx<worker, workerMsg>([this](void)->worker*{ 
+		return new worker(0); 
+	}, app::window));
+	offscrctx->start();
+
 
 	glErrors("app::before");
 	for (size_t p = 0; p < MAX_POLY; p++) coe[p] = coet[p] = 0.0f;
 	
-#if 1
+#if 0
 	coet[0] = -1.0f;
 	coet[1] = -1.0f;
 	coet[4] = 20.0f;
 	coet[7] = 100.0f;
 	coet[44] = 20.0f;
-#else
+#else // Max: 115k
 	coet[0] = -1.0f;
 	coet[7] = 100.0f;
 	coet[977] = 100.0f;
@@ -100,6 +78,10 @@ app::app(GLFWwindow *window, nk_context* ctx) :
 	app::program->use();
 	glUniform1i(app::uniform.screenTexture, 0);
 
+
+	texprogram.reset(new shader(mainVertexShader, viewtexture));
+	texprogram->use();
+	glUniform1i(texprogram->getUniform("screenTexture"), 0);
 	
 	
 	///////////////////////////////////////////////////
@@ -142,6 +124,7 @@ app::app(GLFWwindow *window, nk_context* ctx) :
 }
 
 app::~app() {
+	app::offscrctx.reset(nullptr, false);
 };
 
 void app::keypressed(int key) {
@@ -322,6 +305,13 @@ void app::logic() {
 			nk_layout_row_dynamic(ctx, 20, 2);
 			nk_label(ctx, "Framerate:", NK_TEXT_RIGHT);
 			nk_label(ctx, toString(app::renderer->getFramerate(), 2).c_str(), NK_TEXT_LEFT);
+
+			nk_layout_row_dynamic(ctx, 20, 2);
+			TOOLTIP("Samples per second. Will dramatically increase when choosing lower target framerate!");
+			nk_label(ctx, "Samples/S:", NK_TEXT_RIGHT);
+			nk_label(ctx, (toString(app::renderer->getSamplesPerFrame() * app::renderer->getFramerate() / 1000.0f, 2) + "k").c_str(), NK_TEXT_LEFT);
+
+
 
 			nk_layout_row_dynamic(ctx, 20, 1);
 			TOOLTIP("Progressively increases density. This option is ignored while running animations!");
@@ -566,48 +556,53 @@ void app::render() {
 	*/
 }
 void app::display() {
-		
 
-	///////////////////////////////////
+	criticalSection cs;
+	{
+		///////////////////////////////////
 
-	glErrors("app::display");
+		glErrors("app::display");
 
-	/*
-	glBindFramebuffer(GL_FRAMEBUFFER, 0);
-	glViewport(0, 0, app::width, app::height);
-	glClear(GL_COLOR_BUFFER_BIT);
-	glClearColor(1.0f, 0.0f, 1.0f, 1.0f);
-	*/
-
-	/*
-	app::optim->optimize((sRenderer*)app::renderer.data());
-	while (app::renderer->renderTile([this](ARect tile) -> void { app::renderF(); })) {
+		/*
 		glBindFramebuffer(GL_FRAMEBUFFER, 0);
 		glViewport(0, 0, app::width, app::height);
+		glClear(GL_COLOR_BUFFER_BIT);
+		glClearColor(1.0f, 0.0f, 1.0f, 1.0f);
+		*/
+
+		/*
+		app::optim->optimize((sRenderer*)app::renderer.data());
+		while (app::renderer->renderTile([this](ARect tile) -> void { app::renderF(); })) {
+			glBindFramebuffer(GL_FRAMEBUFFER, 0);
+			glViewport(0, 0, app::width, app::height);
+			app::texprogram->use();
+			app::renderer->drawTile();
+		}
+		*/
+
+		////////////////////////////////////
+
+		glBindFramebuffer(GL_FRAMEBUFFER, 0);
+		glViewport(0, 0, app::width, app::height);
+
+		{
+			double xpos, ypos;
+			glfwGetCursorPos(app::window, &xpos, &ypos);
+			app::renderer->render(int(xpos), int(ypos), app::Change /*|| app::pChange*/);
+		}
+
+		texprogram->use();
+		offscrctx->draw();
+
+		/*
 		app::texprogram->use();
-		app::renderer->drawTile();
+		app::progrenderer->draw();
+		*/
+		//app::texprogram->use();
+		//buf1->readFrom();
+		//app::quad->draw();
+
+		nk_glfw3_render(NK_ANTI_ALIASING_ON, MAX_VERTEX_BUFFER, MAX_ELEMENT_BUFFER);
+		glErrors("app::nuklear");
 	}
-	*/
-
-	////////////////////////////////////
-
-	glBindFramebuffer(GL_FRAMEBUFFER, 0);
-	glViewport(0, 0, app::width, app::height);
-
-	{
-		double xpos, ypos;
-		glfwGetCursorPos(app::window, &xpos, &ypos);
-		app::renderer->render(int(xpos), int(ypos), app::Change /*|| app::pChange*/);
-	}
-	/*
-	app::texprogram->use();
-	app::progrenderer->draw();
-	*/
-	//app::texprogram->use();
-	//buf1->readFrom();
-	//app::quad->draw();
-
-	nk_glfw3_render(NK_ANTI_ALIASING_ON, MAX_VERTEX_BUFFER, MAX_ELEMENT_BUFFER);
-	glErrors("app::nuklear");
-
 }
