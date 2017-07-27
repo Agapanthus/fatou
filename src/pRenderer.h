@@ -41,6 +41,7 @@ public:
 	void scale(AiSize size); 
 
 
+	float getProgress();
 	void discard();
 	void draw(int x, int y, ARect tC);
 	void compose();
@@ -94,6 +95,7 @@ public:
 	void setSampleCount(uint64 samples);
 	uint64 getSampleCount() const;
 	void draw(int x, int y);
+	float getProgress();
 
 	AiSize getSize() const;
 

@@ -24,6 +24,8 @@ const string whiteShader("void main() {"
 
 #ifdef USE_INTERPOLATION
 
+// TODO: This is by far to slow! -> TexelFetch is much slower than texture!
+
 const string composerShader(
 #ifdef USE_TEXTURE_ARRAY
 	"uniform sampler2DArray tex;"
@@ -317,7 +319,7 @@ void pBuffer::recalculateCoeff() {
 						}
 					}
 					// Result will depend exponentially on the distance and longer distances give smaller relevances
-					points[p].relevance = pow( 3.0f - 2.0 * sqrt(i / float(QUEUE_LENGTH)), -points[p].dist);
+					points[p].relevance = pow( 3.0f - 2.0f * sqrt(i / float(QUEUE_LENGTH)), -points[p].dist);
 					// zero should stay zero
 					if (points[p].dist == 0.0f) points[p].relevance = 0.0f;
 				}
@@ -429,13 +431,22 @@ uint64 pBuffer::render(uint64 inSamples, function<void(int)> renderF) {
 		glQuery q = gqt.create();
 #endif
 
+#ifdef USE_TEXTURE_ARRAY
+		buffer->writeTo(0);
+#endif
+		
+		bool first = true;
+
 		while (samplesLeft > 0) {
 			if (pBuffer::currentBuffer == QUEUE_LENGTH) break;
 			
 			uint32 posxnew = minimum(uint32(buffer->getSize().w), posx + uint32(round(double(samplesLeft) / double(buffer->getSize().h))));
 
 			if (posxnew == posx) {
-				break;
+				if (first) {
+					first = false;
+					posxnew++;
+				} else break;
 			}
 			ASize ratio(ASize(buffer->getSize() * QUEUE_LENGTH_R) / ASize(size));
 			ARect part(float(posx) / float(buffer->getSize().w), 0.0f, float(posxnew) / float(buffer->getSize().w), 1.0f);
@@ -447,7 +458,9 @@ uint64 pBuffer::render(uint64 inSamples, function<void(int)> renderF) {
 				((permutationMap[pBuffer::currentBuffer] / QUEUE_LENGTH_R) + 0.5f) / float(QUEUE_LENGTH_R) - 0.5f);
 			delta = delta / ASize(buffer->getSize());
 
+#ifndef USE_TEXTURE_ARRAY
 			buffer->writeTo(permutationMap[pBuffer::currentBuffer]);
+#endif
 			renderF(permutationMap[pBuffer::currentBuffer]);
 			quad.draw(part, partT + delta);
 
@@ -516,6 +529,9 @@ void pBuffer::discard() {
 	pBuffer::posx = 0;
 	pBuffer::currentBuffer = 0;
 }
+float pBuffer::getProgress() {
+	return float(pBuffer::currentBuffer) / float(QUEUE_LENGTH);
+}
 
 /////////////////////////////////////////////////////////////////////////////////////////
 /*****************************[   Progressive Renderer  ]*******************************/
@@ -546,6 +562,8 @@ uint64 pRenderer::getSampleCount() const {
 	return pRenderer::samples;
 }
 void pRenderer::draw(int x, int y) {
+	fassert(realZ != ASize(0.0f, 0.0f));
+	fassert(targetZ != ASize(0.0f, 0.0f));
 	// Solving z2 * (t1 - 0.5) + p2 = z1 * (t2 - 0.5) + p1 for t2 with t1 = (0,0) or t2 = (1,1)
 	ASize t2_00((targetZ * (-0.5f) + targetP - realP) / realZ + 0.5f);
 	ASize t2_11((targetZ * (0.5f) + targetP - realP) / realZ + 0.5f);
@@ -604,4 +622,7 @@ void pRenderer::view(APoint pos, ASize zoom, function<void(APoint, ASize)> viewF
 
 AiSize pRenderer::getSize() const {
 	return pRenderer::size;
+}
+float pRenderer::getProgress() {
+	return buffer->getProgress();
 }

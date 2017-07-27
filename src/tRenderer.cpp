@@ -37,7 +37,7 @@ rTile::~rTile() {
 }
 
 uint64 rTile::render(std::function<void(ARect tile)> content, AiSize tileSize, ARect position) {
-	fassert(rTile::effortQ > 0);
+	fassert(rTile::samples > 0);
 	fassert(tileSize.w <= rTile::size.w);
 	fassert(tileSize.h <= rTile::size.h);
 
@@ -182,18 +182,23 @@ void fOptimizer::hint(double factor) {
 }
 void fOptimizer::optimize(sRenderer *renderer, uint64 samplesRendered) {
 	// TODO: Implement parameterChange
+	// TODO: For very intense jobs, switch to low-framerate mode to archieve higher samples-per-second scores!
+	// TODO: Automatically choose good depth for the pRenderer!
+
 	if (fOptimizer::inited == false) {
-		if(renderer) renderer->setSampleCount(10000); // TODO: Smarter way to choose initial samples?
+		fOptimizer::aSamples = 1000;
 		if (samplesRendered > 0) {
 			fOptimizer::inited = true;
-			fOptimizer::floatingTime = QPC::get();
+			fOptimizer::floatingTimePublic = fOptimizer::floatingTime = QPC::get();
 		}
+
 	}
 	else {
 		double lastTime = QPC::get();
 		if (samplesRendered > 0) {
 			fOptimizer::floatingTime = (9.0*fOptimizer::floatingTime + lastTime) / 10.0;
 		}
+		fOptimizer::floatingTimePublic = (9.0*fOptimizer::floatingTimePublic + lastTime) / 10.0;
 		double optimTime = 1000.0 / fOptimizer::targetFrameRate;
 		double ratio = sqrt( optimTime / fOptimizer::floatingTime);
 		notAgain--;
@@ -214,7 +219,7 @@ void fOptimizer::optimize(sRenderer *renderer, uint64 samplesRendered) {
 		}
 
 
-		if ( renderer && 
+		if (samplesRendered > 0 && renderer &&
 			( (abs(ratio - 1.0f) > 0.1f && notAgain <= 0) 
 				|| (abs(ratio - 1.0f) > 0.01f && notAgain < int(-3.0f* fOptimizer::targetFrameRate)))) {
 			
@@ -222,7 +227,7 @@ void fOptimizer::optimize(sRenderer *renderer, uint64 samplesRendered) {
 
 			fOptimizer::changing = 1.0;
 
-			fOptimizer::aSamples = renderer->getSampleCount();
+			//fOptimizer::aSamples = renderer->getSampleCount();
 			fOptimizer::aSamples = uint64(round(double(fOptimizer::aSamples) * ratio));
 			if (fOptimizer::aSamples < 100) fOptimizer::aSamples = 100; // Minimum Samples
 			else if (fOptimizer::aSamples > double(fOptimizer::maxDensity1D*fOptimizer::maxDensity1D) * double(renderer->getSize().area())) fOptimizer::aSamples = double(fOptimizer::maxDensity1D*fOptimizer::maxDensity1D) * double(renderer->getSize().area());
@@ -245,6 +250,8 @@ void fOptimizer::optimize(sRenderer *renderer, uint64 samplesRendered) {
 			fOptimizer::lastSleep = sleepTime;
 		}
 	}
+
+	if (renderer) renderer->setSampleCount(fOptimizer::aSamples);
 }
 uint64 fOptimizer::getSamples() const {
 	return fOptimizer::aSamples;
@@ -256,7 +263,7 @@ void fOptimizer::setMaxDensity1D(float maxDensity1D) {
 	fOptimizer::maxDensity1D = maxDensity1D;
 }
 float fOptimizer::getFramerate() const {
-	return float(1000.0 / fOptimizer::floatingTime);
+	return float(1000.0 / fOptimizer::floatingTimePublic);
 }
 
 

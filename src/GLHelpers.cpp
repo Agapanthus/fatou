@@ -307,6 +307,7 @@ glLine::~glLine() {
 syncBuffer::syncBuffer(AiSize iSize, bool useMipmap, GLenum quality, GLenum qualityM) :
 	iSize(iSize), useMipmap(useMipmap), quality(quality) {
 	glGenFramebuffers(1, &framebuffer);
+	glErrors("syncBuffer::generate");
 	glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
 
 	glGenTextures(1, &(syncBuffer::tex));
@@ -361,10 +362,12 @@ void syncBuffer::writeTo(std::function<void(void)> content) {
 		glBindTexture(GL_TEXTURE_2D, syncBuffer::tex);
 		glGenerateMipmap(GL_TEXTURE_2D);
 	}
+	glErrors("syncBuffer::write");
 }
 void syncBuffer::readFrom(GLenum textureID) {
 	glActiveTexture(textureID);
 	glBindTexture(GL_TEXTURE_2D, syncBuffer::tex);
+	glErrors("syncBuffer::read");
 }
 void syncBuffer::framebufferRead() {
 	glBindFramebuffer(GL_READ_FRAMEBUFFER, syncBuffer::framebuffer);

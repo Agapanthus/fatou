@@ -44,7 +44,7 @@ using std::thread;
 #include <condition_variable>
 
 // OpenGL
-#include <glbinding/gl/gl.h>
+#include <glbinding/gl32core/gl.h>
 #include <glbinding/Binding.h>
 using namespace gl;
 

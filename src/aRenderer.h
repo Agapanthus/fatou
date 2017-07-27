@@ -28,6 +28,7 @@ public:
 	void setMaxEffort(float maxDensity1D);
 	void setTargetFramerate(float framerate);
 	float getDensity1D();
+	uint64 getSamplesPerFrame();
 	float getFramerate();
 
 	void view(APoint pos, ASize zoom, function<void(APoint, ASize)> viewF);

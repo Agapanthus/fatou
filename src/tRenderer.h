@@ -78,7 +78,7 @@ private:
 	bool inited;
 	double targetFrameRate;
 	float maxDensity1D;
-	double floatingTime;
+	double floatingTime, floatingTimePublic;
 	int notAgain;
 	double changing;
 	uint64 aSamples;

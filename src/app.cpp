@@ -68,7 +68,7 @@ app::app(GLFWwindow *window, nk_context* ctx) :
 	glErrors("app::before");
 	for (size_t p = 0; p < MAX_POLY; p++) coe[p] = coet[p] = 0.0f;
 	
-#if 1
+#if 0
 	coet[0] = -1.0f;
 	coet[1] = -1.0f;
 	coet[4] = 20.0f;
@@ -318,10 +318,15 @@ void app::logic() {
 			float dens = app::renderer->getDensity1D();
 			nk_label(ctx, toString(dens*dens, 2).c_str(), NK_TEXT_LEFT);
 
-
 			nk_layout_row_dynamic(ctx, 20, 2);
 			nk_label(ctx, "Framerate:", NK_TEXT_RIGHT);
 			nk_label(ctx, toString(app::renderer->getFramerate(), 2).c_str(), NK_TEXT_LEFT);
+
+
+			nk_layout_row_dynamic(ctx, 20, 2);
+			TOOLTIP("samples per second. Will increase when decreasing Framerate.");
+			nk_label(ctx, "Samples/s:", NK_TEXT_RIGHT);
+			nk_label(ctx, (toString(app::renderer->getSamplesPerFrame() * app::renderer->getFramerate() / 1000.0f, 1)+"k").c_str(), NK_TEXT_LEFT);
 
 			nk_layout_row_dynamic(ctx, 20, 1);
 			TOOLTIP("Progressively increases density. This option is ignored while running animations!");
