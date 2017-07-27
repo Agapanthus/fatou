@@ -68,7 +68,7 @@ app::app(GLFWwindow *window, nk_context* ctx) :
 	glErrors("app::before");
 	for (size_t p = 0; p < MAX_POLY; p++) coe[p] = coet[p] = 0.0f;
 	
-#if 0
+#if 1
 	coet[0] = -1.0f;
 	coet[1] = -1.0f;
 	coet[4] = 20.0f;

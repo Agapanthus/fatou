@@ -223,11 +223,11 @@ void pBuffer::scale(AiSize size) {
 	pBuffer::currentBuffer = 0;
 }
 
-inline float normLayer(float l) {
+inline float normLayer(float lr) {
 #ifdef USE_TEXTURE_ARRAY
-	return l;
+	return lr;
 #else
-	float layer = l / float(QUEUE_LENGTH - 1);
+	float layer = lr / float(QUEUE_LENGTH - 1);
 	// Very strange thing, but sampler3d returns all zero for z==1.0f...
 	//if (layer == 1.0f) layer = 0.999999f; 
 	// (Instead, I'm using GL_CLAMP_TO_EDGE for now.)
@@ -267,17 +267,17 @@ inline float netDistance(const AiSize &tile, const AiPoint &a, const AiPoint &b,
 void pBuffer::recalculateCoeff() {
 	// Defines the order of layers (maps a layer to each iteration)
 	permutationMap.resize(QUEUE_LENGTH);
-	for (int l = 0; l < QUEUE_LENGTH; l++) { 
-		permutationMap[l] = QUEUE_LENGTH-1- l;
+	for (int lr = 0; lr < QUEUE_LENGTH; lr++) { 
+		permutationMap[lr] = QUEUE_LENGTH-1- lr;
 	}
 	std::random_shuffle(std::begin(permutationMap), std::end(permutationMap));
 
 	for (int32 i = 0; i < QUEUE_LENGTH; i++) { // Iterations
-		for (int32 l = 0; l < QUEUE_LENGTH; l++) { // Layers
+		for (int32 lr = 0; lr < QUEUE_LENGTH; lr++) { // Layers
 			//for(size_t p = 0; p < INTERP_POINTS; p++) { // Points					
 			
-			if (i < l) {
-				AiPoint target(permutationMap[l] % QUEUE_LENGTH_R, permutationMap[l] / QUEUE_LENGTH_R);
+			if (i < lr) {
+				AiPoint target(permutationMap[lr] % QUEUE_LENGTH_R, permutationMap[lr] / QUEUE_LENGTH_R);
 
 		//		cout << "\n\n////////////////////////////////\nIL: " << i << " " << l << " " << toString(target) << endl;
 				
@@ -330,7 +330,7 @@ void pBuffer::recalculateCoeff() {
 				fassert(points[0].relevance != 0.0f); // This is a reserved value! (See fragment shader)
 				fassert(sumRel > 0.0f);
 				for (size_t p = 0; p < INTERP_POINTS; p++) { // Points		
-					coeffBuffer->set(i, permutationMap[l]*INTERP_POINTS + p,
+					coeffBuffer->set(i, permutationMap[lr]*INTERP_POINTS + p,
 						points[p].relativePosition.x / float(buffer->getSize().w),
 						points[p].relativePosition.y / float(buffer->getSize().h),
 						normLayer(float(permutationMap[points[p].layer])),
@@ -346,7 +346,7 @@ void pBuffer::recalculateCoeff() {
 				coeffBuffer->set(i, permutationMap[l] * INTERP_POINTS + 2, 0.0f, 0.0f, normLayer(float(permutationMap[l])), 0.0f);
 				coeffBuffer->set(i, permutationMap[l] * INTERP_POINTS + 3, 0.0f, 0.0f, normLayer(float(permutationMap[l])), 0.0f);
 #else
-				coeffBuffer->set(i, permutationMap[l] * INTERP_POINTS + 0, 0.0f, 0.0f, normLayer(float(permutationMap[l])), 0.0f);
+				coeffBuffer->set(i, permutationMap[lr] * INTERP_POINTS + 0, 0.0f, 0.0f, normLayer(float(permutationMap[lr])), 0.0f);
 #endif
 
 			}
@@ -391,26 +391,26 @@ void pBuffer::draw(int x, int y, ARect t) {
 
 		int xz = (x % QUEUE_LENGTH_X);
 		int yz = QUEUE_LENGTH_Y - 1 - (y % QUEUE_LENGTH_Y);
-		int l = xz + QUEUE_LENGTH_X*yz;
+		int lr = xz + QUEUE_LENGTH_X*yz;
 		const int iter = 13;
 		int value = 0;
 		white->use();
 
-		if (coeffBuffer->get(iter, l*INTERP_POINTS + 0, 3) != 0.0f) {
+		if (coeffBuffer->get(iter, lr*INTERP_POINTS + 0, 3) != 0.0f) {
 			for (size_t p = 0; p < INTERP_POINTS; p++) {
 				value = p;
 
-				if (coeffBuffer->get(iter, l*INTERP_POINTS + value, 3) != 0.0f) {
+				if (coeffBuffer->get(iter, lr*INTERP_POINTS + value, 3) != 0.0f) {
 
-					int tx = int(coeffBuffer->get(iter, l*INTERP_POINTS + value, 2)*QUEUE_LENGTH) % QUEUE_LENGTH_X;
-					int ty = int(coeffBuffer->get(iter, l*INTERP_POINTS + value, 2)*QUEUE_LENGTH) / QUEUE_LENGTH_X;
+					int tx = int(coeffBuffer->get(iter, lr*INTERP_POINTS + value, 2)*QUEUE_LENGTH) % QUEUE_LENGTH_X;
+					int ty = int(coeffBuffer->get(iter, lr*INTERP_POINTS + value, 2)*QUEUE_LENGTH) / QUEUE_LENGTH_X;
 
 
 					if (lmposx != mposx || lmposy != mposy) {
 				//		cout << "pointing: " << xz << " " << yz << "    rel: " << coeffBuffer->get(iter, l*INTERP_POINTS + value, 0) << " " << coeffBuffer->get(iter, l*INTERP_POINTS + value, 1) << "  l: " << coeffBuffer->get(iter, l*INTERP_POINTS + value, 2) << "    target: " << tx << " " << ty << endl;
 					}
-					APoint source(mposx + (tx - xz) / float(size.w) + coeffBuffer->get(iter, l*INTERP_POINTS + value, 0),
-						mposy + (ty - yz) / float(size.h) + coeffBuffer->get(iter, l*INTERP_POINTS + value, 1));
+					APoint source(mposx + (tx - xz) / float(size.w) + coeffBuffer->get(iter, lr*INTERP_POINTS + value, 0),
+						mposy + (ty - yz) / float(size.h) + coeffBuffer->get(iter, lr*INTERP_POINTS + value, 1));
 
 					line.draw(ARect(source.x, source.y, mposx, mposy));
 				}

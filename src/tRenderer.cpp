@@ -251,7 +251,7 @@ void fOptimizer::optimize(sRenderer *renderer, uint64 samplesRendered) {
 		}
 	}
 
-	if (renderer) renderer->setSampleCount(fOptimizer::aSamples);
+	if (renderer) renderer->setSampleCount(fOptimizer::aSamples); // *15); // TODO: Optim could choose A LOT higher sampling counts! But it doesn't...
 }
 uint64 fOptimizer::getSamples() const {
 	return fOptimizer::aSamples;
