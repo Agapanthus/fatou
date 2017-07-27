@@ -153,16 +153,20 @@ const string composerShader(
 
 #endif
 
-pBuffer::pBuffer(AiSize size) :
-	syncBuffer(size, false, GL_LINEAR, GL_LINEAR), size(0, 0) {
+#define SWITCH10(A) A = ((A) == 0) ? 1 : 0
 
-	// Check if there are enough texture units for interpolation
-	/*	GLint texture_units = 0;
-	glGetIntegerv(GL_MAX_TEXTURE_IMAGE_UNITS, &texture_units);
-	glErrors("pRenderer::getMaxTextureImageUnits");
-	if (texture_units < QUEUE_LENGTH) {
-	fatalNote("GPU doesn't support " << QUEUE_LENGTH << " textures per fragment shader");
-	}*/
+pBuffer::pBuffer(AiSize size) : size(0, 0) {
+
+	
+
+	pBuffer::buffers[0].reset(new syncBuffer(size, false, GL_LINEAR, GL_LINEAR));
+	pBuffer::buffers[1].reset(new syncBuffer(size, false, GL_LINEAR, GL_LINEAR));
+	pBuffer::readBuffer = 0;
+	pBuffer::writeBuffer = 0;
+	pBuffer::rPosition[0] = APoint(0.0f, 0.0f);
+	pBuffer::rPosition[1] = APoint(0.0f, 0.0f);
+	pBuffer::rZoom[0] = ASize(1.0f, 1.0f);
+	pBuffer::rZoom[1] = ASize(1.0f, 1.0f);
 
 	pBuffer::white.reset(new shader(mainVertexShader, whiteShader));
 	
@@ -189,18 +193,17 @@ pBuffer::pBuffer(AiSize size) :
 	glUniform1i(uniform.texture, 0);
 
 	pBuffer::scale(size);
-	//glGenQueries(QUEUE_LENGTH, pBuffer::queries);
 }
-pBuffer::~pBuffer() {
-
-}
+pBuffer::~pBuffer() {}
 
 void pBuffer::scale(AiSize size) {
 	fassert(QUEUE_LENGTH > 0);
 
 	if (size != pBuffer::size) {
-		if (size != syncBuffer::iSize)
-			syncBuffer::scale(size, false);
+		if (size != pBuffer::buffers[0]->getSize()) {
+			pBuffer::buffers[0]->scale(size, false);
+			pBuffer::buffers[1]->scale(size, false);
+		}
 
 		if (buffer.empty())
 			buffer.reset(new syncBuffer3d(((size + QUEUE_LENGTH_R - 1) / QUEUE_LENGTH_R), QUEUE_LENGTH, GL_NEAREST, GL_NEAREST));
@@ -215,8 +218,6 @@ void pBuffer::scale(AiSize size) {
 			coeffBuffer->scale(AiSize(QUEUE_LENGTH, QUEUE_LENGTH*INTERP_POINTS));
 			recalculateCoeff(); // TODO: When changing QUEUE_LENGTH this needs to be rerun!
 		}
-
-
 	}
 	pBuffer::size = size;
 	pBuffer::posx = 0;
@@ -361,13 +362,24 @@ void pBuffer::recalculateCoeff() {
 	coeffBuffer->upload();
 }
 
-void pBuffer::draw(int x, int y, ARect t) {
-	// TODO: You should always draw!
+void pBuffer::draw(int x, int y, APoint pos, ASize zoom) {
+	// TODO: There's maybe a bug! The image sometimes jumps when beginning a new rendering cyclus...
+	// TODO: The zoom is juddery if the internal cashe size exceeds Full HD. (For example fullscreen + antialias). Two things to do: First: Reduce composer-target-size density. This makes composing faster and displaying more fluent! Second: Find out, how to make it fluent without first! Maybe a glFinish at the right place...?
+
 	if (pBuffer::currentBuffer > 0) {
-		syncBuffer::readFrom();
-		ARect e(0.0f, 0.0f, 1.0f, 1.0f);
-		pBuffer::quad.draw(ARect(0.0f, 0.0f, 1.0f, 1.0f), t );
+		pBuffer::readBuffer = pBuffer::writeBuffer;
 	}
+
+
+	// Solving z2 * (t1 - 0.5) + p2 = z1 * (t2 - 0.5) + p1 for t2 with t1 = (0,0) or t2 = (1,1)
+	ASize t2_00((zoom * (-0.5f) + pos - pBuffer::rPosition[readBuffer]) / pBuffer::rZoom[readBuffer] + 0.5f);
+	ASize t2_11((zoom * (0.5f) + pos - pBuffer::rPosition[readBuffer]) / pBuffer::rZoom[readBuffer] + 0.5f);
+	ARect tC(t2_00.w, t2_00.h, t2_11.w, t2_11.h);
+
+	pBuffer::buffers[readBuffer]->readFrom();
+	ARect e(0.0f, 0.0f, 1.0f, 1.0f);
+	pBuffer::quad.draw(ARect(0.0f, 0.0f, 1.0f, 1.0f), tC );
+	
 	
 #if 0
 	// To visualize, of which other pixels each composed pixel consists
@@ -488,12 +500,13 @@ uint64 pBuffer::render(uint64 inSamples, function<void(int)> renderF) {
 	
 	return inSamples - samplesLeft;
 }
+
 void pBuffer::compose() {
 
 	buffer->bind(GL_TEXTURE0);
 	coeffBuffer->bind(GL_TEXTURE1);
 
-	syncBuffer::writeTo([this](void)->void {
+	pBuffer::buffers[writeBuffer]->writeTo([this](void)->void {
 		composer->use();
 #ifdef USE_INTERPOLATION
 	//	glUniform2f(uniform.iWinSize, 1.0f/size.w, 1.0f/size.h);
@@ -522,15 +535,37 @@ void pBuffer::compose() {
 
 		pBuffer::quad.draw(part, partT);
 	});
-
 }
 
 void pBuffer::discard() {
 	pBuffer::posx = 0;
 	pBuffer::currentBuffer = 0;
+
+	// Only change the write buffer! The read buffer flips as soon as the quality of the other buffer is better or quickFill() is called!
+	SWITCH10(pBuffer::writeBuffer);
+	pBuffer::rPosition[pBuffer::writeBuffer] = pBuffer::rPosition[pBuffer::readBuffer];
+	pBuffer::rZoom[pBuffer::writeBuffer] = pBuffer::rZoom[pBuffer::readBuffer];
 }
+
 float pBuffer::getProgress() {
 	return float(pBuffer::currentBuffer) / float(QUEUE_LENGTH);
+}
+
+/*
+void pBuffer::swap() {
+	std::swap(pBuffer::writeBuffer, pBuffer::readBuffer);
+	pBuffer::rPosition[pBuffer::writeBuffer] = pBuffer::rPosition[pBuffer::readBuffer];
+	pBuffer::rZoom[pBuffer::writeBuffer] = pBuffer::rZoom[pBuffer::readBuffer];
+}
+*/
+
+void pBuffer::quickFill() {
+	// TODO
+}
+
+void pBuffer::setPosition(APoint pos, ASize zoom) {
+	pBuffer::rPosition[pBuffer::writeBuffer] = pos;
+	pBuffer::rZoom[pBuffer::writeBuffer] = zoom;
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////
@@ -558,19 +593,19 @@ void pRenderer::setSize(AiSize size, float maxDensity1D) {
 void pRenderer::setSampleCount(uint64 samples) {
 	pRenderer::samples = samples;
 }
+
 uint64 pRenderer::getSampleCount() const {
 	return pRenderer::samples;
 }
+
 void pRenderer::draw(int x, int y) {
 	fassert(realZ != ASize(0.0f, 0.0f));
 	fassert(targetZ != ASize(0.0f, 0.0f));
-	// Solving z2 * (t1 - 0.5) + p2 = z1 * (t2 - 0.5) + p1 for t2 with t1 = (0,0) or t2 = (1,1)
-	ASize t2_00((targetZ * (-0.5f) + targetP - realP) / realZ + 0.5f);
-	ASize t2_11((targetZ * (0.5f) + targetP - realP) / realZ + 0.5f);
-	ARect tC(t2_00.w, t2_00.h, t2_11.w, t2_11.h);
-	buffer->draw(x, y, tC);
+	
+	buffer->draw(x, y, targetP, targetZ);
 	// TODO: Improve drawing! We need the algorithm to pre-downscale the buffer when density > 4.0
 }
+
 void pRenderer::view(APoint pos, ASize zoom, function<void(APoint, ASize)> viewF) {
 	// TODO: Zwei Puffer! Den zweiten erst zeigen, sobald der neue besser als der alte ist! Dadurch auch das Ruckeln entfernen!
 	// TODO: Wenn am Rand was gebraucht wird, nur diesen Randbereich neurendern!
@@ -618,11 +653,14 @@ void pRenderer::view(APoint pos, ASize zoom, function<void(APoint, ASize)> viewF
 			}
 		}
 	}
+
+	buffer->setPosition(pRenderer::realP, pRenderer::realZ);
 }
 
 AiSize pRenderer::getSize() const {
 	return pRenderer::size;
 }
+
 float pRenderer::getProgress() {
 	return buffer->getProgress();
 }

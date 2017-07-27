@@ -33,7 +33,7 @@
 #define QUEUE_LENGTH (QUEUE_LENGTH_X*QUEUE_LENGTH_Y)
 
 // Render parts of a frame, almost arbitrarily small parts, an then, compose them to a whole frame
-class pBuffer : public syncBuffer {
+class pBuffer {
 public:
 	// Accepts effort between 0 and 1
 	pBuffer(AiSize size);
@@ -43,13 +43,19 @@ public:
 
 	float getProgress();
 	void discard();
-	void draw(int x, int y, ARect tC);
+	void draw(int x, int y, APoint pos, ASize zoom);
 	void compose();
 	uint64 render(uint64 samples, function<void(int)> renderF);
+
+	void quickFill();
+
+	void setPosition(APoint pos, ASize zoom);
 
 private:
 	//vector<pointer<syncBuffer>> buffers;
 	//GLuint queries[QUEUE_LENGTH];
+
+	void swap();
 
 	pointer<syncBuffer3d> buffer;
 
@@ -74,7 +80,10 @@ private:
 	pointer<shader> white;
 	glLine line;
 
-
+	pointer<syncBuffer> buffers[2];
+	APoint rPosition[2];
+	ASize rZoom[2];
+	size_t writeBuffer, readBuffer;
 };
 
 
@@ -105,6 +114,7 @@ private:
 	AiSize size;
 	uint64 samples;
 
+	// "real" value is the native value the shader is rendering with and "target" is the value visible to the user
 	ASize targetZ, realZ;
 	APoint targetP, realP;
 
