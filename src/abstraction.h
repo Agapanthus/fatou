@@ -292,6 +292,14 @@ struct ASize {
 	inline ASize operator-(const float &div) const {
 		return ASize(ASize::w - div, ASize::h - div);
 	}
+
+	inline float magnitude() {
+		return sqrtf(ASize::w*ASize::w + ASize::h*ASize::h);
+	}
+
+	inline double area() {
+		return double(ASize::w)*ASize::h;
+	}
 };
 typedef ASize APoint;
 

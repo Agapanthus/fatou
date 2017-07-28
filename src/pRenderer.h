@@ -32,6 +32,8 @@
 // TODO: Implement X != Y
 #define QUEUE_LENGTH (QUEUE_LENGTH_X*QUEUE_LENGTH_Y)
 
+struct pointStruct;
+
 // Render parts of a frame, almost arbitrarily small parts, an then, compose them to a whole frame
 class pBuffer {
 public:
@@ -56,7 +58,7 @@ private:
 	//GLuint queries[QUEUE_LENGTH];
 
 	void swap();
-	void initIdentity(int32 i, int32 lr);
+	inline void initIdentity(int32 i, int32 lr);
 
 	pointer<syncBuffer3d> buffer;
 
@@ -85,6 +87,9 @@ private:
 	APoint rPosition[2];
 	ASize rZoom[2];
 	size_t writeBuffer, readBuffer;
+
+	bool directionAware;
+	void insertResult(pointStruct *const points, float uninterest, float dist, AiPoint newPoint, AiPoint interPoint, AiSize relative, int32 i, int32 lr);
 };
 
 
