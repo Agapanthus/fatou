@@ -262,6 +262,21 @@ inline float netDistance(const AiSize &tile, const AiPoint &a, const AiPoint &b,
 	return (dist - (tile / 2)).magnitude();
 }
 
+inline float netDistanceExplicit(const AiSize &tile, const AiPoint &a, const AiPoint &b, AiSize relative) {
+	return (a - (relative * tile + b)).magnitude();
+}
+
+inline void pBuffer::initIdentity(int32 i, int32 lr) {
+#ifdef DISABLE_BRANCHING
+	coeffBuffer->set(i, permutationMap[l] * INTERP_POINTS + 0, 0.0f, 0.0f, normLayer(float(permutationMap[lr])), 1.0f);
+	coeffBuffer->set(i, permutationMap[l] * INTERP_POINTS + 1, 0.0f, 0.0f, normLayer(float(permutationMap[lr])), 0.0f);
+	coeffBuffer->set(i, permutationMap[l] * INTERP_POINTS + 2, 0.0f, 0.0f, normLayer(float(permutationMap[lr])), 0.0f);
+	coeffBuffer->set(i, permutationMap[l] * INTERP_POINTS + 3, 0.0f, 0.0f, normLayer(float(permutationMap[lr])), 0.0f);
+#else
+	coeffBuffer->set(i, permutationMap[lr] * INTERP_POINTS + 0, 0.0f, 0.0f, normLayer(float(permutationMap[lr])), 0.0f);
+#endif
+}
+
 // TODO: Make it use other equivalent points from other tiles, when there are less than INTERP_POINTS samples!
 // TODO: Do this asynchronously!
 // TODO: Use prettier algorithm: faster and better (smoother?) interpolation!
@@ -275,13 +290,9 @@ void pBuffer::recalculateCoeff() {
 
 	for (int32 i = 0; i < QUEUE_LENGTH; i++) { // Iterations
 		for (int32 lr = 0; lr < QUEUE_LENGTH; lr++) { // Layers
-			//for(size_t p = 0; p < INTERP_POINTS; p++) { // Points					
-			
 			if (i < lr) {
 				AiPoint target(permutationMap[lr] % QUEUE_LENGTH_R, permutationMap[lr] / QUEUE_LENGTH_R);
 
-		//		cout << "\n\n////////////////////////////////\nIL: " << i << " " << l << " " << toString(target) << endl;
-				
 				// Find n closest points
 				struct pointStruct {
 					pointStruct() : layer(0), relativePosition(0.0f,0.0f), dist(0.0f), relevance(0.0f) {}
@@ -293,13 +304,15 @@ void pBuffer::recalculateCoeff() {
 
 				for (int32 p = 0; p < INTERP_POINTS; p++) { // Points		
 
-					for (int32 w = 0; w < QUEUE_LENGTH; w++) {
-						// Ignore Points which are already used
+					for (int32 w = 0; w < QUEUE_LENGTH; w++) { // Find next closest point
+						// Ignore Points which are already used (unless this is a early case where we'll make this decision later!)
 						bool found = false;
-						for (int32 r = 0; r < p; r++) {
-							if (points[r].layer == w) {
-								found = true;
-								break;
+						if (i >= INTERP_POINTS) {
+							for (int32 r = 0; r < p; r++) {
+								if (points[r].layer == w) {
+									found = true;
+									break;
+								}
 							}
 						}
 						if (found) continue;
@@ -308,22 +321,52 @@ void pBuffer::recalculateCoeff() {
 						if (w <= i) {
 							// Measure distance
 							ASize relative(0.0f,0.0f);
-							float dist = netDistance(AiSize(QUEUE_LENGTH_X, QUEUE_LENGTH_Y), target, AiPoint(permutationMap[w] % QUEUE_LENGTH_R, permutationMap[w] / QUEUE_LENGTH_R), relative);
-							
+							float dist;
+
+							if (i < INTERP_POINTS) {
+								dist = 0.0f;
+								fassert(INTERP_POINTS <= 9); // cause we are only looking on the 8 neighbouring tiles + 1 center tile
+								for (int32 xdist = -1; xdist <= 1; xdist += 1) {
+									for (int32 ydist = -1; ydist <= 1; ydist += 1) {
+										ASize adist = ASize(float(xdist), float(ydist));
+										// never double-use the same instance of a point!
+										found = false;
+										for (int32 r = 0; r < p; r++) {
+											if (points[r].relativePosition == adist && points[r].layer == w) {
+												found = true;
+												break;
+											}
+										}
+										if (found) continue;
+
+										float td = netDistanceExplicit(AiSize(QUEUE_LENGTH_X, QUEUE_LENGTH_Y), target, AiPoint(permutationMap[w] % QUEUE_LENGTH_R, permutationMap[w] / QUEUE_LENGTH_R), AiSize(xdist, ydist));
+										if (dist == 0.0f || td < dist) {
+											relative = adist;
+											dist = td;
+										}
+									}
+								}
+							}
+							// in this case, two points from the same grid are never considered to be the closest ones!
+							else {
+								dist = netDistance(AiSize(QUEUE_LENGTH_X, QUEUE_LENGTH_Y), target, AiPoint(permutationMap[w] % QUEUE_LENGTH_R, permutationMap[w] / QUEUE_LENGTH_R), relative);
+							}
+
 							// Use this point, if it is the first one or it is closer to the target
 							if (dist < points[p].dist || points[p].dist == 0.0f) {
 								points[p].layer = w;
 								points[p].dist = dist;
 								points[p].relativePosition = relative;
-							//	cout << x << " " << y << "    " << xw << " " << yw << endl;
 							}
 						}
 					}
 					// Result will depend exponentially on the distance and longer distances give smaller relevances
-					points[p].relevance = pow( 3.0f - 2.0f * sqrt(i / float(QUEUE_LENGTH)), -points[p].dist);
+					points[p].relevance = pow(1.0f + (3.2f / (float(QUEUE_LENGTH_X+QUEUE_LENGTH_Y)/2.0f)) * (1.0f + 3.0f * sqrt(i / float(QUEUE_LENGTH))), -(points[p].dist)); // This formula is just guessed by some try-and-error...
+						
 					// zero should stay zero
 					if (points[p].dist == 0.0f) points[p].relevance = 0.0f;
 				}
+				
 				float sumRel = 0.0f;
 				for (size_t p = 0; p < INTERP_POINTS; p++) { // Points		
 					sumRel += points[p].relevance;
@@ -336,24 +379,12 @@ void pBuffer::recalculateCoeff() {
 						points[p].relativePosition.y / float(buffer->getSize().h),
 						normLayer(float(permutationMap[points[p].layer])),
 						points[p].relevance / sumRel);
-		//			cout << "Dist: " << points[p].dist << " " << points[p].relevance / sumRel << " " << points[p].layer << " " << toString(points[p].relativePosition) << endl;
 				}
 
 
 			} else {
-#ifdef DISABLE_BRANCHING
-				coeffBuffer->set(i, permutationMap[l]*INTERP_POINTS + 0, 0.0f, 0.0f, normLayer(float(permutationMap[l])), 1.0f);
-				coeffBuffer->set(i, permutationMap[l] * INTERP_POINTS + 1, 0.0f, 0.0f, normLayer(float(permutationMap[l])), 0.0f);
-				coeffBuffer->set(i, permutationMap[l] * INTERP_POINTS + 2, 0.0f, 0.0f, normLayer(float(permutationMap[l])), 0.0f);
-				coeffBuffer->set(i, permutationMap[l] * INTERP_POINTS + 3, 0.0f, 0.0f, normLayer(float(permutationMap[l])), 0.0f);
-#else
-				coeffBuffer->set(i, permutationMap[lr] * INTERP_POINTS + 0, 0.0f, 0.0f, normLayer(float(permutationMap[lr])), 0.0f);
-#endif
-
+				initIdentity(i, lr);
 			}
-			//}
-
-			//if (i == 5 && l == 4)Sleep(20000000);
 		}
 	}
 	cout << "done" << endl;
@@ -365,6 +396,8 @@ void pBuffer::recalculateCoeff() {
 void pBuffer::draw(int x, int y, APoint pos, ASize zoom) {
 	// TODO: There's maybe a bug! The image sometimes jumps when beginning a new rendering cyclus...
 	// TODO: The zoom is juddery if the internal cashe size exceeds Full HD. (For example fullscreen + antialias). Two things to do: First: Reduce composer-target-size density. This makes composing faster and displaying more fluent! Second: Find out, how to make it fluent without first! Maybe a glFinish at the right place...?
+	// TODO: Diagramme mit puffer, pufferfüllung, pufferdichte, Framezeit, statischer Framezeit, dynamischer Framezeit, Ereigniszeit 
+	// TODO: Calibrate buffers, when algorithm is changing! Choose better rendering times!
 
 	if (pBuffer::currentBuffer > 0) {
 		pBuffer::readBuffer = pBuffer::writeBuffer;
@@ -381,7 +414,7 @@ void pBuffer::draw(int x, int y, APoint pos, ASize zoom) {
 	pBuffer::quad.draw(ARect(0.0f, 0.0f, 1.0f, 1.0f), tC );
 	
 	
-#if 0
+#if 1
 	// To visualize, of which other pixels each composed pixel consists
 	if (x >= 0 && y >= 0) {
 		/*
@@ -512,6 +545,7 @@ void pBuffer::compose() {
 	//	glUniform2f(uniform.iWinSize, 1.0f/size.w, 1.0f/size.h);
 #ifdef USE_TEXEL_FETCH
 		glUniform1i(uniform.iteration, maximum(0, int32(pBuffer::currentBuffer) - 1));
+		Sleep(50);
 #else
 		glUniform1f(uniform.iteration, maximum(0.0f, float(pBuffer::currentBuffer) - 1) / float(QUEUE_LENGTH));
 	//	cout << maximum(0.0f, float(pBuffer::currentBuffer) - 1) / float(QUEUE_LENGTH) << endl;

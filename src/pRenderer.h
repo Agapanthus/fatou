@@ -56,6 +56,7 @@ private:
 	//GLuint queries[QUEUE_LENGTH];
 
 	void swap();
+	void initIdentity(int32 i, int32 lr);
 
 	pointer<syncBuffer3d> buffer;
 

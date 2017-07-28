@@ -62,7 +62,7 @@ app::app(GLFWwindow *window, nk_context* ctx) :
 	biasPower(-40), show_about(false), isFullscreen(false),
 	show_polynomial(true),
 	trace_length(0), show_roots(false), show_tooltips(true),
-	maxDensity(2), maxDensityI(densityTable[maxDensity])
+	maxDensity(1), maxDensityI(densityTable[maxDensity])
 {
 
 	glErrors("app::before");
