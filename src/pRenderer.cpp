@@ -277,118 +277,117 @@ inline void pBuffer::initIdentity(int32 i, int32 lr) {
 #endif
 }
 
-// TODO: Make it use other equivalent points from other tiles, when there are less than INTERP_POINTS samples!
+struct pointStruct {
+	pointStruct() :
+		layer(0), relativePosition(0.0f, 0.0f), interest(0.0f), relevance(0.0f), normVec(0.0f, 0.0f), dist(0.0f) {}
+	pointStruct(int layer, APoint relativePosition, APoint normVec, float dist, float relevance) :
+		layer(layer), relativePosition(relativePosition), normVec(normVec), dist(dist), relevance(relevance), interest(0.0f) {}
+	int32 layer;
+	APoint relativePosition;
+	float interest;
+	APoint normVec;
+	float relevance;
+	float dist;
+};
+
+inline void insertPoint(pointStruct *const ps, pointStruct point) {
+	int32 p;
+	for (p = INTERP_POINTS; p > 0 ? ps[p - 1].dist > point.dist || ps[p - 1].dist == 0.0f : false; p--) {
+		if (p < INTERP_POINTS) ps[p] = ps[p - 1];
+	}
+	if (p < INTERP_POINTS) ps[p] = point;
+}
+
 // TODO: Do this asynchronously!
-// TODO: Use prettier algorithm: faster and better (smoother?) interpolation!
 void pBuffer::recalculateCoeff() {
-	// Defines the order of layers (maps a layer to each iteration)
+	// Defines the order of layers (maps a layer to each iteration) 
+	// We use random_shuffle, because we want a uniform distribution over time. 
 	permutationMap.resize(QUEUE_LENGTH);
-	for (int lr = 0; lr < QUEUE_LENGTH; lr++) { 
-		permutationMap[lr] = QUEUE_LENGTH-1- lr;
+	for (int lr = 0; lr < QUEUE_LENGTH; lr++) {
+		permutationMap[lr] = QUEUE_LENGTH - 1 - lr;
 	}
 	std::random_shuffle(std::begin(permutationMap), std::end(permutationMap));
 
-	for (int32 i = 0; i < QUEUE_LENGTH; i++) { // Iterations
-		for (int32 lr = 0; lr < QUEUE_LENGTH; lr++) { // Layers
-			if (i < lr) {
-				AiPoint target(permutationMap[lr] % QUEUE_LENGTH_R, permutationMap[lr] / QUEUE_LENGTH_R);
 
-				// Find n closest points
-				struct pointStruct {
-					pointStruct() : layer(0), relativePosition(0.0f,0.0f), dist(0.0f), relevance(0.0f) {}
-					int32 layer;
-					APoint relativePosition;
+	//////////////////////
+	// Every Pixel is calculated as the weighted sum of the INTERP_POINTS closest points in it's surrounding.
+	// Optionally, the algorithm will favour points which come from most different directions (to ignore points, which are "hidden" behind another).
+
+	// The last one (points[n][INTERP_POINTS-1]) is always the worst (the one with the largest dist)
+	pointStruct points[QUEUE_LENGTH][INTERP_POINTS];
+
+	// Do for every iteration...
+	for (int32 i = 0; i < QUEUE_LENGTH; i++) {
+		AiPoint newPoint(permutationMap[i] % QUEUE_LENGTH_R, permutationMap[i] / QUEUE_LENGTH_R);
+
+		// Identity-Points
+		for (int32 lr = 0; lr <= i; lr++) {
+			initIdentity(i, lr);
+		}
+
+		// Add this point to those point-structs, for which this point is better than the existing one 
+		for (int32 lr = i+1; lr < QUEUE_LENGTH; lr++) { 
+			AiPoint interPoint(permutationMap[lr] % QUEUE_LENGTH_R, permutationMap[lr] / QUEUE_LENGTH_R);
+			
+			if (true) {
+				for (int32 p = 0; p < maximum(1, INTERP_POINTS - i); p++) {
+					ASize relative(0.0f, 0.0f);
 					float dist;
-					float relevance;
-				} points[INTERP_POINTS];
 
-				for (int32 p = 0; p < INTERP_POINTS; p++) { // Points		
-
-					for (int32 w = 0; w < QUEUE_LENGTH; w++) { // Find next closest point
-						// Ignore Points which are already used (unless this is a early case where we'll make this decision later!)
-						bool found = false;
-						if (i >= INTERP_POINTS) {
-							for (int32 r = 0; r < p; r++) {
-								if (points[r].layer == w) {
-									found = true;
-									break;
-								}
-							}
-						}
-						if (found) continue;
-
-						// Only look on layers already written to
-						if (w <= i) {
-							// Measure distance
-							ASize relative(0.0f,0.0f);
-							float dist;
-
-							if (i < INTERP_POINTS) {
-								dist = 0.0f;
-								fassert(INTERP_POINTS <= 9); // cause we are only looking on the 8 neighbouring tiles + 1 center tile
-								for (int32 xdist = -1; xdist <= 1; xdist += 1) {
-									for (int32 ydist = -1; ydist <= 1; ydist += 1) {
-										ASize adist = ASize(float(xdist), float(ydist));
-										// never double-use the same instance of a point!
-										found = false;
-										for (int32 r = 0; r < p; r++) {
-											if (points[r].relativePosition == adist && points[r].layer == w) {
-												found = true;
-												break;
-											}
-										}
-										if (found) continue;
-
-										float td = netDistanceExplicit(AiSize(QUEUE_LENGTH_X, QUEUE_LENGTH_Y), target, AiPoint(permutationMap[w] % QUEUE_LENGTH_R, permutationMap[w] / QUEUE_LENGTH_R), AiSize(xdist, ydist));
-										if (dist == 0.0f || td < dist) {
-											relative = adist;
-											dist = td;
-										}
+					if (i < INTERP_POINTS) {
+						// Search for other instances of the same point in other layers, if there aren't enough samples in a single tile...
+						dist = 0.0f;
+						fassert(INTERP_POINTS <= 9); // cause we are only looking on the 8 neighbouring tiles + 1 center tile
+						for (int32 xdist = -1; xdist <= 1; xdist += 1) {
+							for (int32 ydist = -1; ydist <= 1; ydist += 1) {
+								ASize adist = ASize(float(xdist), float(ydist));
+								// never double-use the same instance of a point!
+								bool found = false;
+								for (int32 r = 0; r < INTERP_POINTS; r++) {
+									if (points[lr][r].relativePosition == adist && points[lr][r].layer == permutationMap[i]) {
+										found = true;
+										break;
 									}
 								}
-							}
-							// in this case, two points from the same grid are never considered to be the closest ones!
-							else {
-								dist = netDistance(AiSize(QUEUE_LENGTH_X, QUEUE_LENGTH_Y), target, AiPoint(permutationMap[w] % QUEUE_LENGTH_R, permutationMap[w] / QUEUE_LENGTH_R), relative);
-							}
+								if (found) continue;
 
-							// Use this point, if it is the first one or it is closer to the target
-							if (dist < points[p].dist || points[p].dist == 0.0f) {
-								points[p].layer = w;
-								points[p].dist = dist;
-								points[p].relativePosition = relative;
+								float td = netDistanceExplicit(AiSize(QUEUE_LENGTH_X, QUEUE_LENGTH_Y), interPoint, newPoint, AiSize(xdist, ydist));
+								if (dist == 0.0f || td < dist) {
+									relative = adist;
+									dist = td;
+								}
 							}
 						}
 					}
-					// Result will depend exponentially on the distance and longer distances give smaller relevances
-					points[p].relevance = pow(1.0f + (3.2f / (float(QUEUE_LENGTH_X+QUEUE_LENGTH_Y)/2.0f)) * (1.0f + 3.0f * sqrt(i / float(QUEUE_LENGTH))), -(points[p].dist)); // This formula is just guessed by some try-and-error...
-						
-					// zero should stay zero
-					if (points[p].dist == 0.0f) points[p].relevance = 0.0f;
-				}
-				
-				float sumRel = 0.0f;
-				for (size_t p = 0; p < INTERP_POINTS; p++) { // Points		
-					sumRel += points[p].relevance;
-				}
-				fassert(points[0].relevance != 0.0f); // This is a reserved value! (See fragment shader)
-				fassert(sumRel > 0.0f);
-				for (size_t p = 0; p < INTERP_POINTS; p++) { // Points		
-					coeffBuffer->set(i, permutationMap[lr]*INTERP_POINTS + p,
-						points[p].relativePosition.x / float(buffer->getSize().w),
-						points[p].relativePosition.y / float(buffer->getSize().h),
-						normLayer(float(permutationMap[points[p].layer])),
-						points[p].relevance / sumRel);
-				}
+					else {
+						dist = netDistance(AiSize(QUEUE_LENGTH_X, QUEUE_LENGTH_Y), interPoint, newPoint, relative);
+					}
 
+					// This one's better! Update data...
+					if (points[lr][INTERP_POINTS - 1].dist > dist || points[lr][INTERP_POINTS - 1].dist == 0.0f) {
+						// Result will depend exponentially on the distance and longer distances give smaller relevances
+						float relevance = pow(1.0f + (3.2f / (float(QUEUE_LENGTH_X + QUEUE_LENGTH_Y) / 2.0f)) * (1.0f + 3.0f * sqrt(i / float(QUEUE_LENGTH))), -dist); // -(dist / 42); // Just a rule of thumb... TODO: Correct this line! It is actually wrong... Use QUEUE_LENGTH == 45 and watch the first ~50 iterations to see the problem...
 
-			} else {
-				initIdentity(i, lr);
+						insertPoint(points[lr], pointStruct(permutationMap[i], relative, APoint(newPoint) / newPoint.magnitude(), dist, relevance));
+					}
+
+					// Calculate Coefficents...
+					float sumRel = 0.0f;
+					for (size_t p = 0; p < INTERP_POINTS; p++) sumRel += points[lr][p].relevance;
+					fassert(points[lr][0].relevance != 0.0f); // This is a reserved value! (See fragment shader)
+					fassert(sumRel > 0.0f);
+					for (size_t p = 0; p < INTERP_POINTS; p++) { // Points		
+						coeffBuffer->set(i, permutationMap[lr] * INTERP_POINTS + p,
+							points[lr][p].relativePosition.x / float(buffer->getSize().w),
+							points[lr][p].relativePosition.y / float(buffer->getSize().h),
+							normLayer(float(points[lr][p].layer)),
+							points[lr][p].relevance / sumRel);
+					}
+				}
 			}
 		}
+
 	}
-	cout << "done" << endl;
-	//Sleep(100000);
 
 	coeffBuffer->upload();
 }
@@ -414,7 +413,7 @@ void pBuffer::draw(int x, int y, APoint pos, ASize zoom) {
 	pBuffer::quad.draw(ARect(0.0f, 0.0f, 1.0f, 1.0f), tC );
 	
 	
-#if 1
+#if 0
 	// To visualize, of which other pixels each composed pixel consists
 	if (x >= 0 && y >= 0) {
 		/*
@@ -544,8 +543,8 @@ void pBuffer::compose() {
 #ifdef USE_INTERPOLATION
 	//	glUniform2f(uniform.iWinSize, 1.0f/size.w, 1.0f/size.h);
 #ifdef USE_TEXEL_FETCH
-		glUniform1i(uniform.iteration, maximum(0, int32(pBuffer::currentBuffer) - 1));
-		Sleep(50);
+		glUniform1i(uniform.iteration,  maximum(0, int32(pBuffer::currentBuffer) - 1));
+		//Sleep(50);
 #else
 		glUniform1f(uniform.iteration, maximum(0.0f, float(pBuffer::currentBuffer) - 1) / float(QUEUE_LENGTH));
 	//	cout << maximum(0.0f, float(pBuffer::currentBuffer) - 1) / float(QUEUE_LENGTH) << endl;

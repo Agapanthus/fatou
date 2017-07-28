@@ -721,3 +721,13 @@ private:
 #error IMPL
 #endif
 };
+
+
+/////////////////////////////////////////////////////////////////////////////////////////
+/*****************************[          Math            ]******************************/
+
+template<typename T> inline T sum(T* in, size_t size) {
+	if(size > 0) T s = in[0];
+	for (size_t i = 1: i < size; i++) s = s + in[i];
+	return s;
+}
