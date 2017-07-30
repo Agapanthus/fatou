@@ -155,7 +155,7 @@ const string composerShader(
 
 #define SWITCH10(A) A = ((A) == 0) ? 1 : 0
 
-pBuffer::pBuffer(AiSize size) : size(0, 0), directionAware(false) {
+pBuffer::pBuffer(AiSize size) : size(0, 0), directionAware(true), beamCorrection(false) {
 
 	pBuffer::buffers[0].reset(new syncBuffer(size, false, GL_LINEAR, GL_LINEAR));
 	pBuffer::buffers[1].reset(new syncBuffer(size, false, GL_LINEAR, GL_LINEAR));
@@ -275,18 +275,19 @@ inline void pBuffer::initIdentity(int32 i, int32 lr) {
 #endif
 }
 
-
+// This is not really a point - it's a connection between two points: the point to be calculated by interpolation, and a central point which is a component of that interpolation.
 struct pointStruct {
 	pointStruct() :
-		layer(0), relativePosition(0, 0), relevance(0.0f), normVec(0.0f, 0.0f), dist(0.0f), uninteresting(0.0f) {}
-	pointStruct(int layer, AiPoint relativePosition, APoint normVec, float dist, float relevance, float uninteresting) :
-		layer(layer), relativePosition(relativePosition), normVec(normVec), dist(dist), relevance(relevance), uninteresting(uninteresting) {}
-	int32 layer;
-	AiPoint relativePosition;
-	APoint normVec;
-	float relevance;
-	float dist;
-	float uninteresting;
+		layer(0), relativePosition(0, 0), relevance(0.0f), normVec(0.0f, 0.0f), dist(0.0f), uninteresting(0.0f), shadow(1.0f) {}
+	pointStruct(int layer, AiPoint relativePosition, APoint normVec, float dist, float relevance, float uninteresting, float shadow) :
+		layer(layer), relativePosition(relativePosition), normVec(normVec), dist(dist), relevance(relevance), uninteresting(uninteresting), shadow(shadow) {}
+	int32 layer; // layer of the central Point
+	AiPoint relativePosition; // Relative Position of the tile the central Point is inside
+	APoint normVec; // Normalized vector from the interpPoint to the central Point
+	float relevance; // relative weight of the central Point for interpolation
+	float dist; // distance between both points
+	float uninteresting; // distance * inverseShadow
+	float shadow;
 };
 
 inline void insertPoint(pointStruct *const ps, pointStruct point) {
@@ -327,20 +328,51 @@ inline APoint normal(AiPoint in) {
 	return APoint(in) / in.magnitude();
 }
 
-// Result will depend exponentially on the distance and longer distances give smaller relevances
-inline float cRelevance(int32 i, float dist, AiSize tile) {
-	return pow(1.0f + (3.2f / (float(tile.w + tile.h) / 2.0f)) * (1.0f + 3.0f * sqrt(i / float(tile.area()))), -dist);
+inline AiPoint keepInside(AiPoint in, const AiSize tile, AiSize &relativePosition) {
+	// Keep dPoint inside the tile
+	while (in.w < 0) {
+		in.w += tile.w; 
+		relativePosition.w++;
+	}
+	while (in.h < 0) {
+		in.h += tile.h;
+		relativePosition.h++;
+	}
+	if (in.w >= tile.w) {
+		in.w %= tile.w;
+		relativePosition.w--;
+	}
+	if (in.h >= tile.h) {
+		in.h %= tile.h;
+		relativePosition.h--;
+	}
+	return in;
 }
 
-void pBuffer::insertResult(pointStruct *const points, float uninterest, float dist, AiPoint newPoint, AiPoint interPoint, AiSize relative, int32 i, int32 lr) {
-	/*
-	// This one's better! Update data...
-	if (points[INTERP_POINTS - 1].uninteresting > uninterest || points[INTERP_POINTS - 1].uninteresting == 0.0f) {
-		insertPoint(points, pointStruct(permutationMap[i], relative,
-			pBuffer::directionAware ? normal(relativeVector(interPoint, newPoint, relative, AiSize(QUEUE_LENGTH_X, QUEUE_LENGTH_Y))) : ASize(),
-			dist, cRelevance(i, uninterest, AiSize(QUEUE_LENGTH_X, QUEUE_LENGTH_Y)), uninterest));
+inline AiPoint keepInside(AiPoint in, const AiSize tile) {
+	// Keep dPoint inside the tile
+	while (in.w < 0) in.w += tile.w;
+	while (in.h < 0) in.h += tile.h;
+	if (in.w >= tile.w) in.w %= tile.w;
+	if (in.h >= tile.h) in.h %= tile.h;
+	return in;
+}
+
+// Result will depend exponentially on the distance and longer distances give smaller relevances
+inline float cRelevance(int32 i, float dist, AiSize tile, float shadow) {
+	static const float e = 2.7182818284590452353602874713526624977572470f;
+	fassert(tile.w == tile.h);
+	const float k = float(tile.w);
+	return powf(2.0f, - dist * 4.8f * sqrtf(float(i+1)) / k) * shadow;
+}
+
+void pBuffer::writeCoeffMatrix(pointStruct *const points, int32 i, int32 lr) {
+	// Update rel
+	if (!pBuffer::beamCorrection) {
+		for (size_t p = 0; p < INTERP_POINTS; p++) {
+			points[p].relevance = cRelevance(i, points[p].dist, AiSize(QUEUE_LENGTH_X, QUEUE_LENGTH_Y), points[p].shadow);
+		}
 	}
-	*/
 
 	// Calculate Coefficents...
 	float sumRel = 0.0f;
@@ -356,6 +388,9 @@ void pBuffer::insertResult(pointStruct *const points, float uninterest, float di
 	}
 }
 
+#define INTERP_L2P(LAYER) AiPoint(int32(LAYER) % QUEUE_LENGTH_X, int32(LAYER) / QUEUE_LENGTH_Y)
+#define INTERP_P2L(POINT) ((POINT).x + (POINT).y*QUEUE_LENGTH_X)
+
 // TODO: Do this asynchronously!
 void pBuffer::recalculateCoeff() {
 	// Defines the order of layers (maps a layer to each iteration) 
@@ -366,6 +401,13 @@ void pBuffer::recalculateCoeff() {
 	}
 	std::random_shuffle(std::begin(permutationMap), std::end(permutationMap));
 
+	vector<int32> inversePermutationMap;
+	if (beamCorrection) {
+		inversePermutationMap.resize(QUEUE_LENGTH);
+		for (size_t i = 0; i < QUEUE_LENGTH; i++) {
+			inversePermutationMap[permutationMap[i]] = i;
+		}
+	}
 
 	//////////////////////
 	// Every Pixel is calculated as the weighted sum of the INTERP_POINTS closest points in it's surrounding.
@@ -376,32 +418,34 @@ void pBuffer::recalculateCoeff() {
 
 	// Do for every iteration...
 	for (int32 i = 0; i < QUEUE_LENGTH; i++) {
-		AiPoint newPoint(permutationMap[i] % QUEUE_LENGTH_R, permutationMap[i] / QUEUE_LENGTH_R);
+		AiPoint newPoint = INTERP_L2P(permutationMap[i]);
 
 		// Identity-Points
 		for (int32 lr = 0; lr <= i; lr++) {
 			initIdentity(i, lr);
 		}
-
 		
 		// Add this point to those point-structs, for which this point is better than the existing one 
 		for (int32 lr = i+1; lr < QUEUE_LENGTH; lr++) { 
-			AiPoint interPoint(permutationMap[lr] % QUEUE_LENGTH_R, permutationMap[lr] / QUEUE_LENGTH_R);
+			AiPoint interPoint = INTERP_L2P(permutationMap[lr]);
 
+			// Beware: for the first few iterations newPoint might be added multiple times!
 			for (int32 p = 0; p < maximum(1, INTERP_POINTS - i); p++) {
+
 				if (directionAware) {
 					AiSize relative;
 					float uInterest = 0.0f;
 					float dist = 0.0f;
 					const float offset = 1.2f;
 					APoint canNormal;
+					float nativeShadow = 1.0f;
 					//const float rAngle = 0.5f; // About 75 degrees
 					//const float rAngle2 = sqrtf(rAngle);
 
 				//	if (i == 5) cout << "\n" << toString(interPoint) << " " << toString(newPoint) << endl;
 
 					searchNearbyTiles(points[lr], permutationMap[i],
-						[&relative, &uInterest, &dist, &canNormal, interPoint, newPoint, point{ points[lr] }, i, offset](AiSize rel)->void {
+						[&relative, &uInterest, &dist, &canNormal, &nativeShadow, interPoint, newPoint, point{ points[lr] }, i, offset](AiSize rel)->void {
 					
 						APoint candidateNormal = normal(relativeVector(interPoint, newPoint, rel, AiSize(QUEUE_LENGTH_X, QUEUE_LENGTH_Y)));
 
@@ -411,7 +455,7 @@ void pBuffer::recalculateCoeff() {
 						float tInt = 1.0f;
 						for (int32 x = 0; x < INTERP_POINTS; x++) {
 							if (point[x].dist <= dt && point[x].dist != 0.0f) {
-								float rAngle = sqrt(1.0f / point[x].dist); // Close points will cast larger shadows!
+								float rAngle = sqrtf(SHADOW_MAX_WIDTH / point[x].dist); // Close points will cast larger shadows!
 								fassert(isnormal(rAngle)); // Check for nan, inf, 0.0f ...
 								tInt *= (minimum(rAngle, (point[x].normVec - candidateNormal).magnitude())) / rAngle;
 							}
@@ -424,6 +468,7 @@ void pBuffer::recalculateCoeff() {
 					 
 						// Improvements?
 						if (uInterest == 0.0f || uInt < uInterest) {
+							nativeShadow = tInt;
 							relative = rel;
 							uInterest = uInt;
 							dist = dt;
@@ -436,7 +481,7 @@ void pBuffer::recalculateCoeff() {
 
 						pointStruct nPoint(permutationMap[i], relative,
 							normal(relativeVector(interPoint, newPoint, relative, AiSize(QUEUE_LENGTH_X, QUEUE_LENGTH_Y))),
-							dist, cRelevance(i, uInterest, AiSize(QUEUE_LENGTH_X, QUEUE_LENGTH_Y)), uInterest);
+							dist, 0.0f, uInterest, nativeShadow);
 
 						if (points[lr][INTERP_POINTS - 1].uninteresting == 0.0f) {
 							// Append the result
@@ -444,6 +489,8 @@ void pBuffer::recalculateCoeff() {
 						}
 						else {
 							// Replace the worst with the new one!
+
+							// TODO: Is the code inside this scope correct? I didn't checked yet...
 
 							// We have five points. From the first four one (because the fifths is better per definitionem) remove the worst.
 							float worstUInt = 0.0f;
@@ -465,7 +512,7 @@ void pBuffer::recalculateCoeff() {
 										normalToUse = points[lr][x].normVec;
 									}
 									if (distToUse <= dt) {
-										float rAngle = sqrt(1.0f / distToUse);
+										float rAngle = sqrtf(SHADOW_MAX_WIDTH / distToUse);
 										tInt *= (minimum(rAngle, (normalToUse - candidateNormal).magnitude())) / rAngle;
 									}
 								}
@@ -486,7 +533,7 @@ void pBuffer::recalculateCoeff() {
 							float tInt = 1.0f;
 							for (int32 x = 0; x < INTERP_POINTS; x++) {
 								if (x != xz && points[lr][x].dist <= points[lr][xz].dist && points[lr][x].dist != 0.0f) {
-									float rAngle = sqrt(1.0f / points[lr][x].dist); // Close points will cast larger shadows!
+									float rAngle = sqrtf(SHADOW_MAX_WIDTH / points[lr][x].dist); // Close points will cast larger shadows!
 									fassert(isnormal(rAngle)); // Check for nan, inf, 0.0f ...
 									tInt *= (minimum(rAngle, (points[lr][x].normVec - points[lr][xz].normVec).magnitude())) / rAngle;
 								}
@@ -499,16 +546,13 @@ void pBuffer::recalculateCoeff() {
 						pointStruct copiedPoints[INTERP_POINTS];
 						for (int32 x = 0; x < INTERP_POINTS; x++) {
 							copiedPoints[x] = points[lr][x];
-							points[lr][x] = pointStruct();
+							points[lr][x] = move(pointStruct());
 						}
 						for (int32 x = 0; x < INTERP_POINTS; x++) {
 							if(copiedPoints[x].uninteresting != 0.0f)
 								insertPoint(points[lr], copiedPoints[x]);
 						}
-					}
-
-					pBuffer::insertResult(points[lr], uInterest, dist, newPoint, interPoint, relative, i, lr);
-
+					}					
 				} else {
 					AiSize relative;
 					float dist;
@@ -529,42 +573,96 @@ void pBuffer::recalculateCoeff() {
 
 					// This one's better! Update data...
 					if (points[lr][INTERP_POINTS - 1].uninteresting > dist || points[lr][INTERP_POINTS - 1].uninteresting == 0.0f) {
-						insertPoint(points[lr], pointStruct(permutationMap[i], relative,
-							pBuffer::directionAware ? normal(relativeVector(interPoint, newPoint, relative, AiSize(QUEUE_LENGTH_X, QUEUE_LENGTH_Y))) : ASize(),
-							dist, cRelevance(i, dist, AiSize(QUEUE_LENGTH_X, QUEUE_LENGTH_Y)), dist));
+						insertPoint(points[lr], pointStruct(permutationMap[i], relative, ASize(), 
+							dist, 0.0f, dist, 1.0f));
 					}
-
-					pBuffer::insertResult(points[lr], dist, dist, newPoint, interPoint, relative, i, lr);
 				}
 			}
 		}
+		if (beamCorrection) {
+			// This is not too precise:
+			// Think of point close to the central point with a very irregular halo.
+			// The beam might be very short, even though the average radius much larger.
+			// So, be careful, because this isn't considered here!
+			for (int32 lr = i + 1; lr < QUEUE_LENGTH; lr++) {
+				AiPoint testPoint = INTERP_L2P(permutationMap[lr]);
+				for (int32 x = 0; x < INTERP_POINTS; x++) {
+					const pointStruct thisPoint = points[lr][x];
+					const AiPoint centralPoint = INTERP_L2P(thisPoint.layer);
+					int32 d;
 
+					fassert(AiPoint(keepInside(APoint(testPoint) + thisPoint.normVec * thisPoint.dist, AiSize(QUEUE_LENGTH_X, QUEUE_LENGTH_Y))) == APoint(centralPoint));
+					fassert(AiPoint(keepInside(APoint(centralPoint) + (-thisPoint.normVec) * thisPoint.dist, AiSize(QUEUE_LENGTH_X, QUEUE_LENGTH_Y))) == APoint(testPoint));
+
+					// Construct a beam, beginning at the centralpoint and going through the testPoint.
+					// Test (beginning at the testPoint), where this beam for the first time doesn't hit a tile. This is the distance for interpolation.
+
+					//int32 limit = int32(ceil(AiPoint(QUEUE_LENGTH_X, QUEUE_LENGTH_Y).magnitude()));
+					// To prevent irregular shapes:
+					int32 limit = int32(round((thisPoint.normVec * ASize(AiSize(QUEUE_LENGTH_X, QUEUE_LENGTH_Y))).magnitude()));
+					for (d = int32(floor(thisPoint.dist)); d < limit; d++) {
+						// Calculate Coordinates of the point at the end of a beam of length d
+						AiPoint dPoint = centralPoint + AiSize((-thisPoint.normVec) * d);
+						AiPoint relativePosition; // To prevent running into the screen from below!
+						dPoint = keepInside(dPoint, AiSize(QUEUE_LENGTH_X, QUEUE_LENGTH_Y), relativePosition);
+						// Test, if it refers to the centerPoint
+						pointStruct *PS = points[inversePermutationMap[INTERP_P2L(dPoint)]];
+						bool found = false;
+						for (int32 y = 0; y < INTERP_POINTS; y++) {
+							if (PS[y].layer == thisPoint.layer && PS[y].relativePosition == relativePosition)
+								found = true;
+						}
+						if (!found) break;
+					}
+				//	cout << d << " " << thisPoint.dist << endl;
+					fassert(d > 0);
+					fassert(d >= int32(floor(thisPoint.dist)));
+
+					// Calculate relevance
+					points[lr][x].relevance = powf(5.5f, powf(d+1 - thisPoint.dist, .4f)  ) * thisPoint.shadow; // TODO: unfinished! Automatically find coefficients...
+					if (points[lr][x].relevance <= 0.0f) points[lr][x].relevance = 0.001f;
+				}
+			}
+		}
+		for (int32 lr = i + 1; lr < QUEUE_LENGTH; lr++) {
+			pBuffer::writeCoeffMatrix(points[lr], i, lr);
+		}
+
+
+#ifdef _DEBUG
 		////////////// Plots a tile with it's content to the console (for debugging)
 		// You can choose somePoint and someIteration and you will see
-		// -> somePoint (#)
+		// -> somePoint (rendered: C - not rendered: #)
 		// -> the four points used for interpolation to calculate somePoint (1,2,3,4)
 		// -> any other point already rendered (O)
-		// -> For every other Point: The "chooseability" with respect of the angle (: = high = 1.0f, . = medium = >0.5,   low = <=0.5)
+		// -> For every other Point:
+		//		-> if somePoint is rendered: The dependence of every Point on somePoint (W = first, + = second,  : = thrid, . = forth,   = none)
+		//		-> else: if The "chooseability" with respect of the angle (: = high = 1.0f, . = medium = >0.5,   low = <=0.5)
 		const int32 someIteration = -1;
-		if (i == someIteration) {
-			AiPoint somePoint(9, 5);
+		bool someCondition = i == someIteration;
+		AiPoint somePoint(3, 7); // (16, 12);
+		if (someCondition) {
+			cout << "/////////////////////////////////\nFatou-Interpolation-Debug-Plotter\nUse Arrowkeys to navigate. Esc to exit.\n" << endl;
+		}
+		while (someCondition) {
 
 			fassert(somePoint.w < QUEUE_LENGTH_X);
 			fassert(somePoint.h < QUEUE_LENGTH_Y);
 			int32 myIndex;
 			for (myIndex = 0; myIndex < QUEUE_LENGTH; myIndex++) {
-				if (permutationMap[myIndex] == somePoint.x + somePoint.y*QUEUE_LENGTH_X) break;
+				if (permutationMap[myIndex] == INTERP_P2L(somePoint)) break;
 			}
-			fassert(myIndex > i); // Self-selecting is not ok!
+			bool isRen = myIndex <= i;
 			fassert(myIndex < QUEUE_LENGTH);
+			fassert(INTERP_POINTS == 4); // This doesn't support other numbers!
 
 			cout << " ,";
 			for (int32 x = 0; x < QUEUE_LENGTH_X; x++) cout << "--";
-			cout << "-," << endl;
+			cout << "-," << "\n";
 			for (int32 y = 0; y < QUEUE_LENGTH_Y; y++) {
 				cout << " |";
 				for (int32 x = 0; x < QUEUE_LENGTH_X; x++) {
-					int32 mLayer = x + y*QUEUE_LENGTH_X;
+					int32 mLayer = INTERP_P2L(AiPoint(x, y)); // x + y*QUEUE_LENGTH_X;
 					int32 u;
 					for (u = 0; u < QUEUE_LENGTH; u++) {
 						if (permutationMap[u] == mLayer) break;
@@ -572,62 +670,115 @@ void pBuffer::recalculateCoeff() {
 					AiPoint h(x, y);
 
 					if (h == somePoint) {
-						cout << " #";
+						if (isRen)
+							cout << " C";
+						else
+							cout << " #";
 					}
-					else if ( u <= i) {
-						if (points[myIndex][0].layer == mLayer) cout << " 1";
-						else if (points[myIndex][1].layer == mLayer) cout << " 2";
-						else if (points[myIndex][2].layer == mLayer) cout << " 3";
-						else if (points[myIndex][3].layer == mLayer) cout << " 4";
-						else cout << " O";
-					}
-					else {
-						AiSize rel;
-						netDistance(AiSize(QUEUE_LENGTH_X, QUEUE_LENGTH_Y), somePoint, h, rel);
-						APoint pNormal = normal(relativeVector(somePoint, h, rel, AiSize(QUEUE_LENGTH_X, QUEUE_LENGTH_Y)));
-						
-						// Calculate interest
-						float tInt = 1.0f;
-						for (int32 xz = 0; xz < INTERP_POINTS; xz++) {
-						//int32	xz = 3;
+					else if (u <= i) {
 
-							//AiPoint lPoint(points[myIndex][xz].layer % QUEUE_LENGTH_R, points[myIndex][xz].layer / QUEUE_LENGTH_R);
-							//APoint vNormal = normal(relativeVector(somePoint, lPoint, points[myIndex][xz].relativePosition, AiSize(QUEUE_LENGTH_X, QUEUE_LENGTH_Y)));
-
-							APoint vNormal = points[myIndex][xz].normVec;
-
-							float rAngle = sqrt(1.0f / points[myIndex][xz].dist);
-							tInt *= (minimum(rAngle, (vNormal - pNormal).magnitude())) / rAngle;
-						}
-						fassert(tInt <= 1.0f);
-
-						if (tInt == 1.0f) {
-							cout << " :";
-						} else if (tInt > 0.5f) {
-							cout << " .";
+						if (isRen) {
+							cout << " O";
 						}
 						else {
-							cout << "  ";
+							if (points[myIndex][0].layer == mLayer) cout << " 1";
+							else if (points[myIndex][1].layer == mLayer) cout << " 2";
+							else if (points[myIndex][2].layer == mLayer) cout << " 3";
+							else if (points[myIndex][3].layer == mLayer) cout << " 4";
+							else cout << " O";
+						}
+					}
+					else {
+
+						if (isRen) {
+							int32 pinxp = -1;;
+							float relSum = 0.0f;
+							for (int32 pinx = 0; pinx < INTERP_POINTS; pinx++) {
+								if (points[u][pinx].layer == INTERP_P2L(somePoint)) {
+									pinxp = pinx;
+								}
+								relSum += points[u][pinx].relevance;
+							}
+							if (pinxp > 0) {
+								if (points[u][pinxp].relevance > relSum / 1.5f) cout << "[]";
+								else if (points[u][pinxp].relevance > relSum / 2.0f) cout << " W";
+								else if (points[u][pinxp].relevance > relSum / 4.0f) cout << " +";
+								else if (points[u][pinxp].relevance > relSum / 8.0f) cout << " :";
+								else cout << " .";
+							}
+							else cout << "  ";
+
+							/*
+							if (points[u][0].layer == INTERP_P2L(somePoint)) cout << " W";
+							else if (points[u][1].layer == INTERP_P2L(somePoint)) cout << " +";
+							else if (points[u][2].layer == INTERP_P2L(somePoint)) cout << " :";
+							else if (points[u][3].layer == INTERP_P2L(somePoint)) cout << " .";
+							else cout << "  ";*/
+
+						}
+						else {
+							AiSize rel;
+							netDistance(AiSize(QUEUE_LENGTH_X, QUEUE_LENGTH_Y), somePoint, h, rel);
+							APoint pNormal = normal(relativeVector(somePoint, h, rel, AiSize(QUEUE_LENGTH_X, QUEUE_LENGTH_Y)));
+
+							// Calculate interest
+							float tInt = 1.0f;
+							for (int32 xz = 0; xz < INTERP_POINTS; xz++) {
+								//AiPoint lPoint(points[myIndex][xz].layer % QUEUE_LENGTH_R, points[myIndex][xz].layer / QUEUE_LENGTH_R);
+								//APoint vNormal = normal(relativeVector(somePoint, lPoint, points[myIndex][xz].relativePosition, AiSize(QUEUE_LENGTH_X, QUEUE_LENGTH_Y)));
+								APoint vNormal = points[myIndex][xz].normVec;
+								float rAngle = sqrtf(1.0f / points[myIndex][xz].dist);
+								tInt *= (minimum(rAngle, (vNormal - pNormal).magnitude())) / rAngle;
+							}
+							fassert(tInt <= 1.0f);
+							if (tInt == 1.0f) {
+								cout << " :";
+							}
+							else if (tInt > 0.5f) {
+								cout << " .";
+							}
+							else {
+								cout << "  ";
+							}
 						}
 					}
 				}
-				cout << " |" << endl;
+				cout << " |" << "\n";
 			}
 
 			cout << " *";
 			for (int32 x = 0; x < QUEUE_LENGTH_X; x++) cout << "--";
 			cout << "-*" << endl;
-			for (int32 x = 0; x < INTERP_POINTS; x++) {
-				cout << x + 1 << " -> " << toString(points[myIndex][x].relativePosition) << "  dist: " << points[myIndex][x].dist << "  uniterest: " << points[myIndex][x].uninteresting << endl;
+		/*	if (!isRen) {
+				for (int32 x = 0; x < INTERP_POINTS; x++) {
+					cout << x + 1 << " -> " << toString(points[myIndex][x].relativePosition) << "  dist: " << points[myIndex][x].dist << "  uniterest: " << points[myIndex][x].uninteresting << endl;
+				}
+			}*/
+
+#define K_ESCAPE 27
+#define K_UP 72
+#define K_LEFT 75
+#define K_RIGHT 77
+#define K_DOWN 80
+
+			int code = getch();
+			switch(code) {
+			case K_LEFT: somePoint.w--; break;
+			case K_RIGHT: somePoint.w++; break;
+			case K_UP: somePoint.h--; break;
+			case K_DOWN: somePoint.h++; break;
 			}
-
-			QPC q;
-			q.sleep(1000000);
+			if (somePoint.w < 0) somePoint.w = QUEUE_LENGTH_X - 1;
+			if (somePoint.h < 0) somePoint.h = QUEUE_LENGTH_Y - 1;
+			if (somePoint.w > QUEUE_LENGTH_X-1) somePoint.w = 0;
+			if (somePoint.h > QUEUE_LENGTH_Y - 1) somePoint.h = 0;
+			if (code == K_ESCAPE) {
+				break;
+			}
 		}
-		
-
-
 	}
+		
+#endif
 
 	coeffBuffer->upload();
 }
@@ -783,7 +934,8 @@ void pBuffer::compose() {
 #ifdef USE_INTERPOLATION
 	//	glUniform2f(uniform.iWinSize, 1.0f/size.w, 1.0f/size.h);
 #ifdef USE_TEXEL_FETCH
-		glUniform1i(uniform.iteration, 5); //  maximum(0, int32(pBuffer::currentBuffer) - 1));
+		//cout << currentBuffer << endl;
+		glUniform1i(uniform.iteration,  maximum(0, int32(pBuffer::currentBuffer) - 1));
 		//Sleep(50);
 #else
 		glUniform1f(uniform.iteration, maximum(0.0f, float(pBuffer::currentBuffer) - 1) / float(QUEUE_LENGTH));

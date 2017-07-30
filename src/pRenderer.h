@@ -21,12 +21,14 @@
 
 #define MEASURE_PERFORMANCE
 
+#define SHADOW_MAX_WIDTH 1.0f
+
 
 /////////////////////////////////////////////////////////////////////////////////////////
 /*****************************[   Progressive Buffer    ]*******************************/
 
 // TODO: increasing QUEUE_LENGTH has SIGNIFICANT negative effect on rendering time! Why and how to solve that?! (--> Seems to be due to frequent FBO binds...)
-#define QUEUE_LENGTH_R 10
+#define QUEUE_LENGTH_R 20
 #define QUEUE_LENGTH_X QUEUE_LENGTH_R
 #define QUEUE_LENGTH_Y QUEUE_LENGTH_R
 // TODO: Implement X != Y
@@ -88,8 +90,8 @@ private:
 	ASize rZoom[2];
 	size_t writeBuffer, readBuffer;
 
-	bool directionAware;
-	void insertResult(pointStruct *const points, float uninterest, float dist, AiPoint newPoint, AiPoint interPoint, AiSize relative, int32 i, int32 lr);
+	bool directionAware, beamCorrection;
+	void writeCoeffMatrix(pointStruct *const points, int32 i, int32 lr);
 };
 
 

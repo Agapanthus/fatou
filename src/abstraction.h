@@ -182,6 +182,7 @@ private:
 
 struct AiSize {
 	AiSize(int32 w, int32 h) : w(w), h(h) {}
+	template <class T> AiSize(const T &in) : w(int32(round(in.w))), h(int32(round(in.h))) {}
 	AiSize() : w(0), h(0) {}
 	union { 
 		int32 w; 
@@ -231,11 +232,11 @@ struct AiSize {
 		return AiSize(AiSize::w * b.w, AiSize::h * b.h);
 	}
 
-	inline float magnitude() {
+	inline float magnitude() const {
 		return sqrtf(float(AiSize::w*AiSize::w + AiSize::h*AiSize::h));
 	}
 
-	inline int64 area() {
+	inline int64 area() const {
 		return int64(AiSize::w)*AiSize::h;
 	}
 };
@@ -292,12 +293,18 @@ struct ASize {
 	inline ASize operator-(const float &div) const {
 		return ASize(ASize::w - div, ASize::h - div);
 	}
+	inline ASize operator-() const {
+		ASize v;
+		v.x = -x;
+		v.y = -y;
+		return v;
+	}
 
-	inline float magnitude() {
+	inline float magnitude() const {
 		return sqrtf(ASize::w*ASize::w + ASize::h*ASize::h);
 	}
 
-	inline double area() {
+	inline double area() const {
 		return double(ASize::w)*ASize::h;
 	}
 };

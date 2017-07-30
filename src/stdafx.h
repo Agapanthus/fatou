@@ -42,6 +42,12 @@ using std::thread;
 #include <queue>
 #include <mutex>
 #include <condition_variable>
+#include <xutility>
+using std::move;
+
+// getch() (for debugging)
+#include <stdio.h>
+#include <conio.h>
 
 // OpenGL
 #include <glbinding/gl32core/gl.h>
