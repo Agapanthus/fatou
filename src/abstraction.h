@@ -239,6 +239,9 @@ struct AiSize {
 	inline int64 area() const {
 		return int64(AiSize::w)*AiSize::h;
 	}
+	inline int32 area32() const {
+		return AiSize::w*AiSize::h;
+	}
 };
 
 typedef AiSize AiPoint;

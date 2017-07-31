@@ -155,7 +155,7 @@ const string composerShader(
 
 #define SWITCH10(A) A = ((A) == 0) ? 1 : 0
 
-pBuffer::pBuffer(AiSize size) : size(0, 0), directionAware(true), beamCorrection(false) {
+pBuffer::pBuffer(AiSize size) : size(0, 0), directionAware(true), beamCorrection(false), mesh(10, 10) {
 
 	pBuffer::buffers[0].reset(new syncBuffer(size, false, GL_LINEAR, GL_LINEAR));
 	pBuffer::buffers[1].reset(new syncBuffer(size, false, GL_LINEAR, GL_LINEAR));
@@ -195,7 +195,7 @@ pBuffer::pBuffer(AiSize size) : size(0, 0), directionAware(true), beamCorrection
 pBuffer::~pBuffer() {}
 
 void pBuffer::scale(AiSize size) {
-	fassert(QUEUE_LENGTH > 0);
+	fassert(pBuffer::mesh.area32() > 0);
 
 	if (size != pBuffer::size) {
 		if (size != pBuffer::buffers[0]->getSize()) {
@@ -204,16 +204,16 @@ void pBuffer::scale(AiSize size) {
 		}
 
 		if (buffer.empty())
-			buffer.reset(new syncBuffer3d(((size + QUEUE_LENGTH_R - 1) / QUEUE_LENGTH_R), QUEUE_LENGTH, GL_NEAREST, GL_NEAREST));
+			buffer.reset(new syncBuffer3d(((size + pBuffer::mesh - 1) / pBuffer::mesh), pBuffer::mesh.area32(), GL_NEAREST, GL_NEAREST));
 		else
-			buffer->scale(((size + QUEUE_LENGTH_R - 1) / QUEUE_LENGTH_R));
+			buffer->scale(((size + pBuffer::mesh - 1) / pBuffer::mesh));
 
 		if (coeffBuffer.empty()) {
-			coeffBuffer.reset(new floatStorage(AiSize(QUEUE_LENGTH, QUEUE_LENGTH*INTERP_POINTS)));
+			coeffBuffer.reset(new floatStorage(AiSize(pBuffer::mesh.area32(), pBuffer::mesh.area32() * INTERP_POINTS)));
 			recalculateCoeff(); // TODO: When changing QUEUE_LENGTH this needs to be rerun!
 		}
 		else {
-			coeffBuffer->scale(AiSize(QUEUE_LENGTH, QUEUE_LENGTH*INTERP_POINTS));
+			coeffBuffer->scale(AiSize(pBuffer::mesh.area32(), pBuffer::mesh.area32() * INTERP_POINTS));
 			recalculateCoeff(); // TODO: When changing QUEUE_LENGTH this needs to be rerun!
 		}
 	}
@@ -226,7 +226,7 @@ inline float normLayer(float lr) {
 #ifdef USE_TEXTURE_ARRAY
 	return lr;
 #else
-	float layer = lr / float(QUEUE_LENGTH - 1);
+	float layer = lr / float(pBuffer::mesh.area32() - 1);
 	// Very strange thing, but sampler3d returns all zero for z==1.0f...
 	//if (layer == 1.0f) layer = 0.999999f; 
 	// (Instead, I'm using GL_CLAMP_TO_EDGE for now.)
@@ -256,7 +256,7 @@ inline float netDistance(const AiSize &tile, const AiPoint &a, const AiPoint &b,
 		relative.h -= 1;
 	}
 	// Move back to the origin [ a = (0,0) ] and then calculate magnitude
-	fassert((dist - (tile / 2)).magnitude() <= AiSize(QUEUE_LENGTH_X, QUEUE_LENGTH_Y).magnitude());
+	fassert((dist - (tile / 2)).magnitude() <= tile.magnitude());
 	return (dist - (tile / 2)).magnitude();
 }
 
@@ -360,7 +360,6 @@ inline AiPoint keepInside(AiPoint in, const AiSize tile) {
 
 // Result will depend exponentially on the distance and longer distances give smaller relevances
 inline float cRelevance(int32 i, float dist, AiSize tile, float shadow) {
-	static const float e = 2.7182818284590452353602874713526624977572470f;
 	fassert(tile.w == tile.h);
 	const float k = float(tile.w);
 	return powf(2.0f, - dist * 4.8f * sqrtf(float(i+1)) / k) * shadow;
@@ -370,7 +369,7 @@ void pBuffer::writeCoeffMatrix(pointStruct *const points, int32 i, int32 lr) {
 	// Update rel
 	if (!pBuffer::beamCorrection) {
 		for (size_t p = 0; p < INTERP_POINTS; p++) {
-			points[p].relevance = cRelevance(i, points[p].dist, AiSize(QUEUE_LENGTH_X, QUEUE_LENGTH_Y), points[p].shadow);
+			points[p].relevance = cRelevance(i, points[p].dist, pBuffer::mesh, points[p].shadow);
 		}
 	}
 
@@ -388,23 +387,24 @@ void pBuffer::writeCoeffMatrix(pointStruct *const points, int32 i, int32 lr) {
 	}
 }
 
-#define INTERP_L2P(LAYER) AiPoint(int32(LAYER) % QUEUE_LENGTH_X, int32(LAYER) / QUEUE_LENGTH_Y)
-#define INTERP_P2L(POINT) ((POINT).x + (POINT).y*QUEUE_LENGTH_X)
+#define INTERP_L2P(LAYER) AiPoint(int32(LAYER) % pBuffer::mesh.w, int32(LAYER) / pBuffer::mesh.h)
+#define INTERP_P2L(POINT) ((POINT).x + (POINT).y * pBuffer::mesh.w)
 
 // TODO: Do this asynchronously!
 void pBuffer::recalculateCoeff() {
 	// Defines the order of layers (maps a layer to each iteration) 
 	// We use random_shuffle, because we want a uniform distribution over time. 
-	permutationMap.resize(QUEUE_LENGTH);
-	for (int lr = 0; lr < QUEUE_LENGTH; lr++) {
-		permutationMap[lr] = QUEUE_LENGTH - 1 - lr;
+	const int32 MA = pBuffer::mesh.area32();
+	permutationMap.resize(MA);
+	for (int lr = 0; lr < MA; lr++) {
+		permutationMap[lr] = MA - 1 - lr;
 	}
 	std::random_shuffle(std::begin(permutationMap), std::end(permutationMap));
 
 	vector<int32> inversePermutationMap;
 	if (beamCorrection) {
-		inversePermutationMap.resize(QUEUE_LENGTH);
-		for (size_t i = 0; i < QUEUE_LENGTH; i++) {
+		inversePermutationMap.resize(MA);
+		for (int32 i = 0; i < MA; i++) {
 			inversePermutationMap[permutationMap[i]] = i;
 		}
 	}
@@ -414,10 +414,12 @@ void pBuffer::recalculateCoeff() {
 	// Optionally, the algorithm will favour points which come from most different directions (to ignore points, which are "hidden" behind another).
 
 	// The last one (points[n][INTERP_POINTS-1]) is always the worst (the one with the largest dist)
-	pointStruct points[QUEUE_LENGTH][INTERP_POINTS];
-
+	//pointStruct points[MA][INTERP_POINTS];
+	vector<std::array<pointStruct, 4>> points;
+	points.resize(MA);
+	
 	// Do for every iteration...
-	for (int32 i = 0; i < QUEUE_LENGTH; i++) {
+	for (int32 i = 0; i < MA; i++) {
 		AiPoint newPoint = INTERP_L2P(permutationMap[i]);
 
 		// Identity-Points
@@ -426,7 +428,7 @@ void pBuffer::recalculateCoeff() {
 		}
 		
 		// Add this point to those point-structs, for which this point is better than the existing one 
-		for (int32 lr = i+1; lr < QUEUE_LENGTH; lr++) { 
+		for (int32 lr = i+1; lr < MA; lr++) { 
 			AiPoint interPoint = INTERP_L2P(permutationMap[lr]);
 
 			// Beware: for the first few iterations newPoint might be added multiple times!
@@ -444,12 +446,12 @@ void pBuffer::recalculateCoeff() {
 
 				//	if (i == 5) cout << "\n" << toString(interPoint) << " " << toString(newPoint) << endl;
 
-					searchNearbyTiles(points[lr], permutationMap[i],
-						[&relative, &uInterest, &dist, &canNormal, &nativeShadow, interPoint, newPoint, point{ points[lr] }, i, offset](AiSize rel)->void {
+					searchNearbyTiles(points[lr].data(), permutationMap[i],
+						[&relative, &uInterest, &dist, &canNormal, &nativeShadow, interPoint, newPoint, point{ points[lr] }, i, offset, this](AiSize rel)->void {
 					
-						APoint candidateNormal = normal(relativeVector(interPoint, newPoint, rel, AiSize(QUEUE_LENGTH_X, QUEUE_LENGTH_Y)));
+						APoint candidateNormal = normal(relativeVector(interPoint, newPoint, rel, pBuffer::mesh));
 
-						float dt = netDistanceExplicit(AiSize(QUEUE_LENGTH_X, QUEUE_LENGTH_Y), interPoint, newPoint, rel);
+						float dt = netDistanceExplicit(pBuffer::mesh, interPoint, newPoint, rel);
 					
 						// Calculate interest
 						float tInt = 1.0f;
@@ -480,12 +482,12 @@ void pBuffer::recalculateCoeff() {
 					if (points[lr][INTERP_POINTS - 1].uninteresting == 0.0f || points[lr][INTERP_POINTS - 1].uninteresting > uInterest) {
 
 						pointStruct nPoint(permutationMap[i], relative,
-							normal(relativeVector(interPoint, newPoint, relative, AiSize(QUEUE_LENGTH_X, QUEUE_LENGTH_Y))),
+							normal(relativeVector(interPoint, newPoint, relative, pBuffer::mesh)),
 							dist, 0.0f, uInterest, nativeShadow);
 
 						if (points[lr][INTERP_POINTS - 1].uninteresting == 0.0f) {
 							// Append the result
-							insertPoint(points[lr], nPoint);
+							insertPoint(points[lr].data(), nPoint);
 						}
 						else {
 							// Replace the worst with the new one!
@@ -528,7 +530,6 @@ void pBuffer::recalculateCoeff() {
 						}
 				
 						// Recalculate uninterest
-						float tInts[INTERP_POINTS];
 						for (int32 xz = 0; xz < INTERP_POINTS; xz++) {
 							float tInt = 1.0f;
 							for (int32 x = 0; x < INTERP_POINTS; x++) {
@@ -550,7 +551,7 @@ void pBuffer::recalculateCoeff() {
 						}
 						for (int32 x = 0; x < INTERP_POINTS; x++) {
 							if(copiedPoints[x].uninteresting != 0.0f)
-								insertPoint(points[lr], copiedPoints[x]);
+								insertPoint(points[lr].data(), copiedPoints[x]);
 						}
 					}					
 				} else {
@@ -559,8 +560,8 @@ void pBuffer::recalculateCoeff() {
 
 					if (i < INTERP_POINTS) {
 						dist = 0.0f;
-						searchNearbyTiles(points[lr], permutationMap[i], [&dist, &relative, interPoint, newPoint](AiSize rel)->void {
-							float td = netDistanceExplicit(AiSize(QUEUE_LENGTH_X, QUEUE_LENGTH_Y), interPoint, newPoint, rel);
+						searchNearbyTiles(points[lr].data(), permutationMap[i], [&dist, &relative, interPoint, newPoint, this](AiSize rel)->void {
+							float td = netDistanceExplicit(pBuffer::mesh, interPoint, newPoint, rel);
 							if (dist == 0.0f || td < dist) {
 								relative = rel;
 								dist = td;
@@ -568,12 +569,12 @@ void pBuffer::recalculateCoeff() {
 						});
 					}
 					else {
-						dist = netDistance(AiSize(QUEUE_LENGTH_X, QUEUE_LENGTH_Y), interPoint, newPoint, relative);
+						dist = netDistance(pBuffer::mesh, interPoint, newPoint, relative);
 					}
 
 					// This one's better! Update data...
 					if (points[lr][INTERP_POINTS - 1].uninteresting > dist || points[lr][INTERP_POINTS - 1].uninteresting == 0.0f) {
-						insertPoint(points[lr], pointStruct(permutationMap[i], relative, ASize(), 
+						insertPoint(points[lr].data(), pointStruct(permutationMap[i], relative, ASize(), 
 							dist, 0.0f, dist, 1.0f));
 					}
 				}
@@ -584,29 +585,29 @@ void pBuffer::recalculateCoeff() {
 			// Think of point close to the central point with a very irregular halo.
 			// The beam might be very short, even though the average radius much larger.
 			// So, be careful, because this isn't considered here!
-			for (int32 lr = i + 1; lr < QUEUE_LENGTH; lr++) {
+			for (int32 lr = i + 1; lr < pBuffer::mesh.area32(); lr++) {
 				AiPoint testPoint = INTERP_L2P(permutationMap[lr]);
 				for (int32 x = 0; x < INTERP_POINTS; x++) {
 					const pointStruct thisPoint = points[lr][x];
 					const AiPoint centralPoint = INTERP_L2P(thisPoint.layer);
 					int32 d;
 
-					fassert(AiPoint(keepInside(APoint(testPoint) + thisPoint.normVec * thisPoint.dist, AiSize(QUEUE_LENGTH_X, QUEUE_LENGTH_Y))) == APoint(centralPoint));
-					fassert(AiPoint(keepInside(APoint(centralPoint) + (-thisPoint.normVec) * thisPoint.dist, AiSize(QUEUE_LENGTH_X, QUEUE_LENGTH_Y))) == APoint(testPoint));
+					fassert(AiPoint(keepInside(APoint(testPoint) + thisPoint.normVec * thisPoint.dist, pBuffer::mesh)) == APoint(centralPoint));
+					fassert(AiPoint(keepInside(APoint(centralPoint) + (-thisPoint.normVec) * thisPoint.dist, pBuffer::mesh)) == APoint(testPoint));
 
 					// Construct a beam, beginning at the centralpoint and going through the testPoint.
 					// Test (beginning at the testPoint), where this beam for the first time doesn't hit a tile. This is the distance for interpolation.
 
 					//int32 limit = int32(ceil(AiPoint(QUEUE_LENGTH_X, QUEUE_LENGTH_Y).magnitude()));
 					// To prevent irregular shapes:
-					int32 limit = int32(round((thisPoint.normVec * ASize(AiSize(QUEUE_LENGTH_X, QUEUE_LENGTH_Y))).magnitude()));
+					int32 limit = int32(round((thisPoint.normVec * ASize(pBuffer::mesh)).magnitude()));
 					for (d = int32(floor(thisPoint.dist)); d < limit; d++) {
 						// Calculate Coordinates of the point at the end of a beam of length d
-						AiPoint dPoint = centralPoint + AiSize((-thisPoint.normVec) * d);
+						AiPoint dPoint = centralPoint + AiSize((-thisPoint.normVec) * float(d));
 						AiPoint relativePosition; // To prevent running into the screen from below!
-						dPoint = keepInside(dPoint, AiSize(QUEUE_LENGTH_X, QUEUE_LENGTH_Y), relativePosition);
+						dPoint = keepInside(dPoint, pBuffer::mesh, relativePosition);
 						// Test, if it refers to the centerPoint
-						pointStruct *PS = points[inversePermutationMap[INTERP_P2L(dPoint)]];
+						std::array<pointStruct, 4> PS = points[inversePermutationMap[INTERP_P2L(dPoint)]];
 						bool found = false;
 						for (int32 y = 0; y < INTERP_POINTS; y++) {
 							if (PS[y].layer == thisPoint.layer && PS[y].relativePosition == relativePosition)
@@ -619,13 +620,16 @@ void pBuffer::recalculateCoeff() {
 					fassert(d >= int32(floor(thisPoint.dist)));
 
 					// Calculate relevance
-					points[lr][x].relevance = powf(5.5f, powf(d+1 - thisPoint.dist, .4f)  ) * thisPoint.shadow; // TODO: unfinished! Automatically find coefficients...
-					if (points[lr][x].relevance <= 0.0f) points[lr][x].relevance = 0.001f;
+					
+					fassert(pBuffer::mesh.w == pBuffer::mesh.h);
+					const float k = float(pBuffer::mesh.w);
+					points[lr][x].relevance = powf(2.0f, -thisPoint.dist * 12.3f  / (k / sqrtf(float(i + 1)) + float(d)) ) * thisPoint.shadow;
+
 				}
 			}
 		}
-		for (int32 lr = i + 1; lr < QUEUE_LENGTH; lr++) {
-			pBuffer::writeCoeffMatrix(points[lr], i, lr);
+		for (int32 lr = i + 1; lr < MA; lr++) {
+			pBuffer::writeCoeffMatrix(points[lr].data(), i, lr);
 		}
 
 
@@ -646,25 +650,25 @@ void pBuffer::recalculateCoeff() {
 		}
 		while (someCondition) {
 
-			fassert(somePoint.w < QUEUE_LENGTH_X);
-			fassert(somePoint.h < QUEUE_LENGTH_Y);
+			fassert(somePoint.w < pBuffer::mesh.w);
+			fassert(somePoint.h < pBuffer::mesh.h);
 			int32 myIndex;
-			for (myIndex = 0; myIndex < QUEUE_LENGTH; myIndex++) {
+			for (myIndex = 0; myIndex < pBuffer::mesh.area32(); myIndex++) {
 				if (permutationMap[myIndex] == INTERP_P2L(somePoint)) break;
 			}
 			bool isRen = myIndex <= i;
-			fassert(myIndex < QUEUE_LENGTH);
+			fassert(myIndex < pBuffer::mesh.area32());
 			fassert(INTERP_POINTS == 4); // This doesn't support other numbers!
 
 			cout << " ,";
-			for (int32 x = 0; x < QUEUE_LENGTH_X; x++) cout << "--";
+			for (int32 x = 0; x < pBuffer::mesh.w; x++) cout << "--";
 			cout << "-," << "\n";
-			for (int32 y = 0; y < QUEUE_LENGTH_Y; y++) {
+			for (int32 y = 0; y < pBuffer::mesh.h; y++) {
 				cout << " |";
-				for (int32 x = 0; x < QUEUE_LENGTH_X; x++) {
+				for (int32 x = 0; x < pBuffer::mesh.w; x++) {
 					int32 mLayer = INTERP_P2L(AiPoint(x, y)); // x + y*QUEUE_LENGTH_X;
 					int32 u;
-					for (u = 0; u < QUEUE_LENGTH; u++) {
+					for (u = 0; u < pBuffer::mesh.area32(); u++) {
 						if (permutationMap[u] == mLayer) break;
 					}
 					AiPoint h(x, y);
@@ -718,8 +722,8 @@ void pBuffer::recalculateCoeff() {
 						}
 						else {
 							AiSize rel;
-							netDistance(AiSize(QUEUE_LENGTH_X, QUEUE_LENGTH_Y), somePoint, h, rel);
-							APoint pNormal = normal(relativeVector(somePoint, h, rel, AiSize(QUEUE_LENGTH_X, QUEUE_LENGTH_Y)));
+							netDistance(pBuffer::mesh, somePoint, h, rel);
+							APoint pNormal = normal(relativeVector(somePoint, h, rel, pBuffer::mesh));
 
 							// Calculate interest
 							float tInt = 1.0f;
@@ -747,7 +751,7 @@ void pBuffer::recalculateCoeff() {
 			}
 
 			cout << " *";
-			for (int32 x = 0; x < QUEUE_LENGTH_X; x++) cout << "--";
+			for (int32 x = 0; x < pBuffer::mesh.w; x++) cout << "--";
 			cout << "-*" << endl;
 		/*	if (!isRen) {
 				for (int32 x = 0; x < INTERP_POINTS; x++) {
@@ -761,17 +765,17 @@ void pBuffer::recalculateCoeff() {
 #define K_RIGHT 77
 #define K_DOWN 80
 
-			int code = getch();
+			int code = _getch();
 			switch(code) {
 			case K_LEFT: somePoint.w--; break;
 			case K_RIGHT: somePoint.w++; break;
 			case K_UP: somePoint.h--; break;
 			case K_DOWN: somePoint.h++; break;
 			}
-			if (somePoint.w < 0) somePoint.w = QUEUE_LENGTH_X - 1;
-			if (somePoint.h < 0) somePoint.h = QUEUE_LENGTH_Y - 1;
-			if (somePoint.w > QUEUE_LENGTH_X-1) somePoint.w = 0;
-			if (somePoint.h > QUEUE_LENGTH_Y - 1) somePoint.h = 0;
+			if (somePoint.w < 0) somePoint.w = pBuffer::mesh.w - 1;
+			if (somePoint.h < 0) somePoint.h = pBuffer::mesh.h - 1;
+			if (somePoint.w > pBuffer::mesh.w - 1) somePoint.w = 0;
+			if (somePoint.h > pBuffer::mesh.h - 1) somePoint.h = 0;
 			if (code == K_ESCAPE) {
 				break;
 			}
@@ -873,7 +877,7 @@ uint64 pBuffer::render(uint64 inSamples, function<void(int)> renderF) {
 		bool first = true;
 
 		while (samplesLeft > 0) {
-			if (pBuffer::currentBuffer == QUEUE_LENGTH) break;
+			if (pBuffer::currentBuffer == pBuffer::mesh.area32()) break;
 			
 			uint32 posxnew = minimum(uint32(buffer->getSize().w), posx + uint32(round(double(samplesLeft) / double(buffer->getSize().h))));
 
@@ -883,14 +887,14 @@ uint64 pBuffer::render(uint64 inSamples, function<void(int)> renderF) {
 					posxnew++;
 				} else break;
 			}
-			ASize ratio(ASize(buffer->getSize() * QUEUE_LENGTH_R) / ASize(size));
+			ASize ratio(ASize(buffer->getSize() * pBuffer::mesh) / ASize(size));
 			ARect part(float(posx) / float(buffer->getSize().w), 0.0f, float(posxnew) / float(buffer->getSize().w), 1.0f);
 			ARect partT = part * ASize(ratio.w, ratio.h);
 
 			pBuffer::posx = posxnew;
 
-			ASize delta(((permutationMap[pBuffer::currentBuffer] % QUEUE_LENGTH_R) + 0.5f) / float(QUEUE_LENGTH_R) - 0.5f,
-				((permutationMap[pBuffer::currentBuffer] / QUEUE_LENGTH_R) + 0.5f) / float(QUEUE_LENGTH_R) - 0.5f);
+			ASize delta(((permutationMap[pBuffer::currentBuffer] % pBuffer::mesh.w) + 0.5f) / float(pBuffer::mesh.w) - 0.5f,
+				((permutationMap[pBuffer::currentBuffer] / pBuffer::mesh.h) + 0.5f) / float(pBuffer::mesh.h) - 0.5f);
 			delta = delta / ASize(buffer->getSize());
 
 #ifndef USE_TEXTURE_ARRAY
@@ -912,7 +916,7 @@ uint64 pBuffer::render(uint64 inSamples, function<void(int)> renderF) {
 	{
 		glQuery q = gqt.create();
 #endif
-		// TODO: Improve performance by using Array Textures with Geometry shader (No FBO's!), not using Texel Fetch and composing less! 
+		// TODO: Improve performance by using Array Textures with Geometry shader (No FBO's!), not using Texel Fetch and composing less!  Use unfiroms instead of textures, when possible! Use downscaled composition!
 		if (changed) // TODO: Composing is quite time consuming... Maybe it's a good idea to give some option like "compose at most 3 times per second" (HINT: Composing 4k takes between 8 and 60 ms on my Thinkpad T540p, depending on the number of layers and the number of interpolated texels)
 			pBuffer::compose();
 
@@ -935,7 +939,7 @@ void pBuffer::compose() {
 	//	glUniform2f(uniform.iWinSize, 1.0f/size.w, 1.0f/size.h);
 #ifdef USE_TEXEL_FETCH
 		//cout << currentBuffer << endl;
-		glUniform1i(uniform.iteration,  maximum(0, int32(pBuffer::currentBuffer) - 1));
+		glUniform1i(uniform.iteration, maximum(0, int32(pBuffer::currentBuffer) - 1));
 		//Sleep(50);
 #else
 		glUniform1f(uniform.iteration, maximum(0.0f, float(pBuffer::currentBuffer) - 1) / float(QUEUE_LENGTH));
@@ -948,14 +952,15 @@ void pBuffer::compose() {
 		//glUniform2f(uniform.scale, float(size.w) / float(buffer->getSize().w*QUEUE_LENGTH_R), float(size.h) / float(buffer->getSize().h*QUEUE_LENGTH_R));
 		//glUniform2i(uniform.winSize, size.w, size.h);
 #endif
-		glUniform1i(uniform.queue_r, (QUEUE_LENGTH_R));
+		fassert(pBuffer::mesh.w == pBuffer::mesh.h);
+		glUniform1i(uniform.queue_r, (pBuffer::mesh.w));
 		
 		glErrors("pBuffer::composeUniform");
 
 		ARect part(0.0f, 0.0f, 1.0f, 1.0f);
 		ARect partT(part);
-		ASize Relation(float(pBuffer::size.w) / float(pBuffer::buffer->getSize().w * QUEUE_LENGTH_R),
-			float(pBuffer::size.h) / float(pBuffer::buffer->getSize().h * QUEUE_LENGTH_R));
+		ASize Relation(float(pBuffer::size.w) / float(pBuffer::buffer->getSize().w * pBuffer::mesh.w),
+			float(pBuffer::size.h) / float(pBuffer::buffer->getSize().h * pBuffer::mesh.h));
 		partT = partT * Relation;
 
 		pBuffer::quad.draw(part, partT);
@@ -973,7 +978,7 @@ void pBuffer::discard() {
 }
 
 float pBuffer::getProgress() {
-	return float(pBuffer::currentBuffer) / float(QUEUE_LENGTH);
+	return float(pBuffer::currentBuffer) / float(pBuffer::mesh.area32());
 }
 
 /*

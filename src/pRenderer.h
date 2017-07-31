@@ -27,13 +27,6 @@
 /////////////////////////////////////////////////////////////////////////////////////////
 /*****************************[   Progressive Buffer    ]*******************************/
 
-// TODO: increasing QUEUE_LENGTH has SIGNIFICANT negative effect on rendering time! Why and how to solve that?! (--> Seems to be due to frequent FBO binds...)
-#define QUEUE_LENGTH_R 20
-#define QUEUE_LENGTH_X QUEUE_LENGTH_R
-#define QUEUE_LENGTH_Y QUEUE_LENGTH_R
-// TODO: Implement X != Y
-#define QUEUE_LENGTH (QUEUE_LENGTH_X*QUEUE_LENGTH_Y)
-
 struct pointStruct;
 
 // Render parts of a frame, almost arbitrarily small parts, an then, compose them to a whole frame
@@ -59,7 +52,6 @@ private:
 	//vector<pointer<syncBuffer>> buffers;
 	//GLuint queries[QUEUE_LENGTH];
 
-	void swap();
 	inline void initIdentity(int32 i, int32 lr);
 
 	pointer<syncBuffer3d> buffer;
@@ -89,6 +81,8 @@ private:
 	APoint rPosition[2];
 	ASize rZoom[2];
 	size_t writeBuffer, readBuffer;
+
+	AiSize mesh;
 
 	bool directionAware, beamCorrection;
 	void writeCoeffMatrix(pointStruct *const points, int32 i, int32 lr);
