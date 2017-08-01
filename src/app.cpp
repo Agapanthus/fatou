@@ -10,6 +10,7 @@
 
 #include "stdafx.h"
 #include "app.h"
+#include "nkHelper.h"
 
 
 /////////////////////////////////////////////////////////////////////////////////////////
@@ -21,86 +22,23 @@ static const char *densitySelect[] = { "0.25", "1", "4", "9", "16", "36", "100" 
 static const float densityTable[] = { 0.5f, 1.0f, 2.0f, 3.0f, 4.0f, 6.0f, 10.0f };
 
 
-#ifdef USE_TEXTURE_ARRAY
-const string mainVertexShaderRenamed(
-	"layout (location = 0) in vec2 aPos;"
-	"layout(location = 1) in vec2 aTexCoords;"
-	"out vec2 TexCoordsVs;"
-	"void main() {"
-	"	TexCoordsVs = aTexCoords;"
-	"	gl_Position = vec4(aPos.x, aPos.y, 0.0, 1.0);"
-	"}");
-const string triangleLayerSelector(
-	"uniform int lr;"
-	"in vec2 TexCoordsVs[3];"
-	"out vec2 TexCoords;"
-	"layout(triangles) in;"
-	"layout(triangle_strip, max_vertices = 3) out;"
-	"void main(void) {"
-	"	for (int i = 0; i<gl_in.length(); i++) {"
-	"		TexCoords = TexCoordsVs[i];"
-	"		gl_Layer = lr;"
-	"		gl_Position = gl_in[i].gl_Position;"
-	"		EmitVertex();"
-	"	}"
-	"	EndPrimitive();"
-	"}");
-#endif
-
-
 app::app(GLFWwindow *window, nk_context* ctx) :
-	cx(0.00000001f), cy(3.0f),
-	iter(100),
-	zoomx(1.0f), zoomy(1.0f), zoom(2.0f),
-	posx(0.0f), posy(0.0f),
+	zoomx(1.0f), zoomy(1.0f), zoom(0.5f),
+	posx(0.0f), posy(0.2f),
 	animSpeed(1000.0f),
 	lastTime(UINT32_MAX),
 	window(window), ctx(ctx),
 	navigationMode(navigation_lrclick_combi),
 	supers(1.0f), tiles(1,1),
 	targetFRate(25),
-	biasPower(-40), show_about(false), isFullscreen(false),
+	show_about(false), isFullscreen(false),
 	show_polynomial(true),
-	trace_length(0), show_roots(false), show_tooltips(true),
+	trace_length(0), show_roots(false), 
 	maxDensity(1), maxDensityI(densityTable[maxDensity])
 {
 
 	glErrors("app::before");
-	for (size_t p = 0; p < MAX_POLY; p++) coe[p] = coet[p] = 0.0f;
-	
-#if 1
-	coet[0] = -1.0f;
-	coet[1] = -1.0f;
-	coet[4] = 20.0f;
-	coet[7] = 100.0f;
-	coet[44] = 20.0f;
-#else
-	coet[0] = -1.0f;
-	coet[7] = 100.0f;
-	coet[977] = 100.0f;
-	coet[1] = -1.0f;
-#endif
 
-	for (size_t p = 0; p < MAX_POLY; p++) coe[p] = coet[p];
-
-
-#ifdef USE_TEXTURE_ARRAY
-	app::program.reset(new shader(mainVertexShaderRenamed, mainFragmentShader, triangleLayerSelector));
-	app::uniform.layer = app::program->getUniform("lr");
-#else
-	app::program.reset(new shader(mainVertexShader, mainFragmentShader));
-#endif
-	app::uniform.screenTexture = app::program->getUniform("screenTexture");
-	app::uniform.c = app::program->getUniform("c");
-	app::uniform.iter = app::program->getUniform("iter");
-	app::uniform.zoom = app::program->getUniform("zoom");
-	app::uniform.pos = app::program->getUniform("pos");
-	app::uniform.coe = app::program->getUniform("coe");
-	app::uniform.coec = app::program->getUniform("coec");
-	app::program->use();
-	glUniform1i(app::uniform.screenTexture, 0);
-
-	
 	
 	///////////////////////////////////////////////////
 
@@ -116,28 +54,9 @@ app::app(GLFWwindow *window, nk_context* ctx) :
 
 	glfwGetWindowSize(app::window, &(app::width), &(app::height));
 
-	app::colorMap.reset(new texture(basePath + "res/hue.png"));
+	fra.reset(new fractal());
 	
-	app::renderF = [this](int layer) -> void {
-		//glClear(GL_COLOR_BUFFER_BIT);
-		//glClearColor(0.0f, 0.0f, 1.0f, 1.0f);
-
-		app::program->use();
-
-		glUniform2f(app::uniform.c, cx, cy);
-		glUniform1i(app::uniform.iter, iter);
-		glUniform1fv(app::uniform.coe, MAX_POLY, coe);
-		glUniform1i(app::uniform.coec, coec);
-#ifdef USE_TEXTURE_ARRAY
-		glUniform1i(app::uniform.layer, layer);
-#endif
-		glErrors("app::uniform");
-
-		app::colorMap->use(GL_TEXTURE0);
-	};
-
-
-	app::renderer.reset(new aRenderer(AiSize(app::width, app::height), tiles, app::maxDensityI, float(app::targetFRate), renderF));
+	app::renderer.reset(new aRenderer(AiSize(app::width, app::height), tiles, app::maxDensityI, float(app::targetFRate), [this](int32 l)->void { app::fra->render(l); }));
 	
 }
 
@@ -194,8 +113,8 @@ void app::logic() {
 	app::Change = false;
 	app::pChange = false;
 
-	unsigned int now = gtimeGet();
-	unsigned int timeElapsed = now - app::lastTime;
+	uint32 now = gtimeGet();
+	uint32 timeElapsed = now - app::lastTime;
 	if (app::lastTime == UINT32_MAX) timeElapsed = 1;
 	app::lastTime = now;
 
@@ -205,16 +124,7 @@ void app::logic() {
 
 	nk_glfw3_new_frame();
 
-	
-	const struct nk_input *in = &ctx->input;
-	struct nk_rect bounds;
-#define TOOLTIP(TEXT) \
-	if(app::show_tooltips) {\
-		bounds = nk_widget_bounds(ctx); \
-		if (nk_input_is_mouse_hovering_rect(in, bounds) \
-			&& nk_window_is_hovered(ctx) /*otherwise tooltips will even appear when the hovered element is invisible. !!! TODO: But they still appear, when hovering another window which is ontop of them!*/) \
-			nk_tooltip(ctx, TEXT); \
-	}
+	tooltip ttip(ctx);
 
 	if (show_polynomial) {
 		if (nk_begin(ctx, "Fractal", nk_rect(10, 330, 220, 200),
@@ -274,30 +184,11 @@ void app::logic() {
 
 		if (nk_tree_push(ctx, NK_TREE_TAB, "Renderer", NK_MAXIMIZED)) {
 
-			nk_layout_row_dynamic(ctx, 25, 1);
-			int iter = app::iter;
-			nk_property_int(ctx, "Iterations:", 1, &(iter), 1000, 10, iter * 0.001f + 0.03f);
-			if (iter != app::iter) {
-				Change = true;
-				app::iter = iter;
-			}
-
-			nk_layout_row_dynamic(ctx, 25, 1);
-			TOOLTIP("Magnitudes below 2^bias are assumed to have converged. Too small values cause floating point errors! Use double precision for better quality!");
-			nk_property_int(ctx, "Bias:", -50, &biasPower, 10, 1, 0.1f);
-			if (app::cx != pow(2.0f, float(biasPower))) {
-				Change = true;
-				app::cx = pow(2.0f, float(biasPower));
-			}
-
-			nk_layout_row_dynamic(ctx, 25, 1);
-			int dummy = 0;
-			nk_property_int(ctx, "Anim. speed:", -50, &dummy, 10, 1, 0.1f);
-			// TODO: 
+			Change |= fra->nk(ctx, ttip);
 
 			nk_layout_row_begin(ctx, NK_DYNAMIC, 25, 2);
 			nk_layout_row_push(ctx, 0.6f);
-			TOOLTIP("High densities need VERY much RAM! To compensate that, increase the number of tiles.");
+			ttip.create(ctx, "High densities need VERY much RAM! To compensate that, increase the number of tiles.");
 			nk_label(ctx, "Max. Density:", NK_TEXT_RIGHT);
 			nk_layout_row_push(ctx, 0.4f);
 			app::maxDensity = nk_combo(ctx, densitySelect, sizeof(densitySelect)/sizeof(densitySelect[0]), app::maxDensity, 25, nk_vec2(80, 110));
@@ -313,7 +204,7 @@ void app::logic() {
 			app::renderer->setTargetFramerate(float(app::targetFRate));
 
 			nk_layout_row_dynamic(ctx, 20, 2);
-			TOOLTIP("samples per pixel (density > 1.0 leads to antialiasing)");
+			ttip.create(ctx, "samples per pixel (density > 1.0 leads to antialiasing)");
 			nk_label(ctx, "Density:", NK_TEXT_RIGHT);
 			float dens = app::renderer->getDensity1D();
 			nk_label(ctx, toString(dens*dens, 2).c_str(), NK_TEXT_LEFT);
@@ -324,30 +215,30 @@ void app::logic() {
 
 
 			nk_layout_row_dynamic(ctx, 20, 2);
-			TOOLTIP("samples per second. Will increase when decreasing Framerate.");
+			ttip.create(ctx, "samples per second. Will increase when decreasing Framerate.");
 			nk_label(ctx, "Samples/s:", NK_TEXT_RIGHT);
 			nk_label(ctx, (toString(app::renderer->getSamplesPerFrame() * app::renderer->getFramerate() / 1000.0f, 1)+"k").c_str(), NK_TEXT_LEFT);
 
 			nk_layout_row_dynamic(ctx, 20, 1);
-			TOOLTIP("Progressively increases density. This option is ignored while running animations!");
+			ttip.create(ctx, "Progressively increases density. This option is ignored while running animations!");
 			static int titlebar = true;
 			nk_checkbox_label(ctx, "Progressive renderer", &titlebar);
 			// TODO
 
 			nk_layout_row_dynamic(ctx, 20, 1);
-			TOOLTIP("Instead of discarding outdated image data, it is progressively interpolated with new data.");
+			ttip.create(ctx, "Instead of discarding outdated image data, it is progressively interpolated with new data.");
 			nk_checkbox_label(ctx, "Progressive update", &titlebar);
 			// TODO: Dazu auch eine Prozentanzeige "Veraltete Texel: 23.5%", die dann schnell absinkt
 
 			nk_layout_row_dynamic(ctx, 20, 1);
-			TOOLTIP("Enables \"deep zoom\" and improves image quality but is much slower!");
+			ttip.create(ctx, "Enables \"deep zoom\" and improves image quality but is much slower!");
 			static int titlebar2 = true;
 			nk_checkbox_label(ctx, "Double precision", &titlebar2);
 			// TODO
 
 			nk_layout_row_dynamic(ctx, 25, 1);
-			TOOLTIP("High numbers of tiles reduce RAM consumption but are computationally more intense. This option is ignored while progressive rendering is used.");
-			nk_property_int(ctx, "Tiles:", 1, &(app::iter), 1000, 10, app::iter * 0.001f + 0.03f);
+			ttip.create(ctx, "High numbers of tiles reduce RAM consumption but are computationally more intense. This option is ignored while progressive rendering is used.");
+			nk_property_int(ctx, "Tiles:", 1, &(titlebar2), 1000, 10, titlebar2);
 			// TODO
 
 			nk_tree_pop(ctx);
@@ -382,7 +273,7 @@ void app::logic() {
 
 
 			nk_layout_row_dynamic(ctx, 20, 1);
-			TOOLTIP("Instead of discarding all data when the camera is moving, some Pixels are calcluted by interpolation of old ones. Might lead to heterogenous pixel density!");
+			ttip.create(ctx, "Instead of discarding all data when the camera is moving, some Pixels are calcluted by interpolation of old ones. Might lead to heterogenous pixel density!");
 			static int titlebar = true;
 			nk_checkbox_label(ctx, "Recycle Texels", &titlebar);
 			// TODO
@@ -408,7 +299,8 @@ void app::logic() {
 			// Orbit Traps! + Images!
 
 			nk_layout_row_dynamic(ctx, 25, 1);
-			nk_property_float(ctx, "Gradient:", 0.0f, &(app::cy), 10.0f, 1, 0.02f);
+			float dum = 0.0f;
+			nk_property_float(ctx, "Gradient:", 0.0f, &dum, 10.0f, 1, 0.02f);
 
 			nk_tree_pop(ctx);
 
@@ -543,58 +435,15 @@ void app::logic() {
 		}
 
 
-	///////////////////// Animate Polynomials
-	for (size_t p = 0; p < MAX_POLY; p++) {
-		if (coet[p] != 0.0f || coe[p] != 0.0f) {
-			coec = p;
-			if (abs(coe[p] - coet[p]) < 0.000001f) coe[p] = coet[p];
-			else {
-				float blendTim = tanh(0.01f * timeElapsed / (animSpeed / 1000.0f));
-				coe[p] = coe[p] * (1.0f - blendTim) + coet[p] * blendTim;
-				app::Change = true;
-			}
-		}
-	}
+	app::Change |= app::fra->logic(timeElapsed, app::animSpeed);
 
-//	coe[1] = (sin(clock() / 10000.0f + 3.16*1) ) * 1.5f + 0.5f;
-	app::renderer->view(APoint(app::posx, app::posy), ASize(app::zoomx, app::zoomy), [this](APoint p, ASize z)->void {
-		app::program->use();
-		glUniform2f(app::uniform.zoom, z.w, z.h);
-		glUniform2f(app::uniform.pos, p.x, p.y);
-	});
+	app::renderer->view(APoint(app::posx, app::posy), ASize(app::zoomx, app::zoomy), [this](APoint p, ASize z)->void { app::fra->view(p, z); });
 
 }
-void app::render() {
-	/*static bool changed = true;
-	app::progrenderer->render(app::renderF, changed);
-	changed = false;
-	*/
-}
+
 void app::display() {
-		
 
-	///////////////////////////////////
-
-	glErrors("app::display");
-
-	/*
-	glBindFramebuffer(GL_FRAMEBUFFER, 0);
-	glViewport(0, 0, app::width, app::height);
-	glClear(GL_COLOR_BUFFER_BIT);
-	glClearColor(1.0f, 0.0f, 1.0f, 1.0f);
-	*/
-
-	/*
-	app::optim->optimize((sRenderer*)app::renderer.data());
-	while (app::renderer->renderTile([this](ARect tile) -> void { app::renderF(); })) {
-		glBindFramebuffer(GL_FRAMEBUFFER, 0);
-		glViewport(0, 0, app::width, app::height);
-		app::texprogram->use();
-		app::renderer->drawTile();
-	}
-	*/
-
-	////////////////////////////////////
+	glErrors("app::preDisplay");
 
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 	glViewport(0, 0, app::width, app::height);
@@ -604,13 +453,9 @@ void app::display() {
 		glfwGetCursorPos(app::window, &xpos, &ypos);
 		app::renderer->render(int(xpos), int(ypos), app::Change /*|| app::pChange*/);
 	}
-	/*
-	app::texprogram->use();
-	app::progrenderer->draw();
-	*/
-	//app::texprogram->use();
-	//buf1->readFrom();
-	//app::quad->draw();
+
+	glErrors("app::render");
+
 
 	nk_glfw3_render(NK_ANTI_ALIASING_ON, MAX_VERTEX_BUFFER, MAX_ELEMENT_BUFFER);
 	glErrors("app::nuklear");

@@ -63,8 +63,6 @@ int _main(int argc, char **argv) {
 		
 		///////////////////////////////////
 
-		//static unsigned int lastFrameTime = gtimeGet();
-
 		while (!glfwWindowShouldClose(window)) {
 
 			glfwPollEvents();
@@ -73,7 +71,6 @@ int _main(int argc, char **argv) {
 				glfwSetWindowShouldClose(window, true);
 			
 			APP->logic();
-			APP->render();
 			APP->display();
 
 			if (doubleBuffered) {
@@ -84,12 +81,6 @@ int _main(int argc, char **argv) {
 				glFinish();
 				glErrors("main::finish");
 			}
-
-			/*unsigned int delta_t = gtimeGet() - lastFrameTime;
-			if (delta_t < (1000 / MaxFRate))
-				Sleep(1000 / MaxFRate - delta_t);
-			lastFrameTime = gtimeGet();
-			*/
 		}
 	}
 	catch (const runtime_error &e) {

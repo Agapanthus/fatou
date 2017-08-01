@@ -62,9 +62,9 @@ private:
 	void recalculateCoeff();
 
 	struct {
-		GLuint texture, queue_l , queue_r, maxZ, interPM, iteration, iWinSize;
+		GLuint texture, mesh_area, mesh_side, maxZ, interPM, iteration, iWinSize;
 		//GLuint winSize, scale;
-		GLuint inverse_queue_l_minus_one;
+		GLuint inverse_mesh_area_minus_one;
 	} uniform;
 
 	sQuad quad;

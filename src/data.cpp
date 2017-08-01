@@ -36,8 +36,10 @@ const string mainFragmentShader(
 	"\n"
 	"#define product(a, b) vec2(a.x*b.x-a.y*b.y, a.x*b.y+a.y*b.x)\n"
 	"#define divide(a, b) vec2(((a.x*b.x+a.y*b.y)/(b.x*b.x+b.y*b.y)),((a.y*b.x-a.x*b.y)/(b.x*b.x+b.y*b.y)))\n"
-	"#define magnitude(a) sqrt(2*a.x*a.x)\n"
-	"#define msize(a) 2*a.x*a.x\n"
+	"#define magnitudeA(a) sqrt(2*a.x*a.x)\n"
+	"#define msizeA(a) 2*a.x*a.x\n" // Using them will result in quite interesting results!
+	"#define magnitude(a) sqrt(a.x*a.x+a.y*a.y)\n"
+	"#define msize(a) (a.x*a.x+a.y*a.y)\n"
 
 	"void main() {"
 	"	vec2 z;"
@@ -46,15 +48,19 @@ const string mainFragmentShader(
 	"	z.y = zoom.y * (tc.y - 0.5) + pos.y;"
 
 	"	int i;"
-//#define MANDELBROT
+	//#define MANDELBROT
 #ifdef MANDELBROT
 	"	vec2 p = coe[0]*0.0f + coec*0.0f + z;"
 	"	for (i = 0; i<iter; i++) {"
 	"		p = product(p, p) + z;"
-	//	"		if (msize(p) > c.x) break;" // Looks like wool with bias == 2 
+	//	"		if (msizeA(p) > c.x) break;" // Looks like wool with bias == 2 
 	"		if (magnitude(p) > c.x) break;"
 	"	}"
 #else
+#define Continuous_coloring
+#ifdef Continuous_coloring
+	"	float nu = 0.0f;"
+#endif	
 	"	for (i = 0; i<iter; i++) {"
 	"		int ii;"
 	"		vec2 f = vec2(coe[0], 0.0);"
@@ -67,13 +73,24 @@ const string mainFragmentShader(
 	"			if (coe[ii] != 0) f += coe[ii] * ex;"
 	"		}"
 	"		vec2 dif = divide(f, ff);"
-	"		if (msize(dif) < c.x) break;"
+	"		if (msize(dif) < c.x) {"
+#ifdef Continuous_coloring
+	// Multiply with large Number and use msizeA to get really intresting lines!
+	"			nu = log( log(msize(dif)) / log(c.x) ) * 3.78418963391826; "//log(float(coec)); " // TODO: Nothing serious. Needs to be improved!
+#endif
+	"			break;"
+	"		}"
 	"		z -= dif;"
 	"	}"
 #endif
+#ifdef Continuous_coloring
+	"	float vali = (float(i) + 1.0f -  nu) * c.y;"
+	"	if (vali > float(iter)) vali = float(iter);"
+#else
 	"	float vali = float(i)*c.y;"
 	"	if (vali > float(iter)) vali = float(iter);"
-	"	vec2 nz = normalize(z) * 0.4 + 0.5;"
+#endif
+	"	vec2 nz = normalize(z) * 0.4f + 0.5f;"
 	"	gl_FragColor = i >= (iter - 1) ? vec4(0.0) : (1 - vali / iter)*texture(screenTexture, nz);"
 	"	gl_FragColor.w = 1.0;"
 	"}");
@@ -86,19 +103,6 @@ const string mainVertexShader(
 	"	TexCoords = aTexCoords;"
 	"	gl_Position = vec4(aPos.x, aPos.y, 0.0, 1.0);"
 	"}");
-
-/*
-// vertex attributes for a quad that fills the entire screen in Normalized Device Coordinates.
-const float quadVertices[] = {
-	// positions   // texCoords
-	-1.0f,  1.0f,  0.0f, 1.0f,
-	-1.0f, -1.0f,  0.0f, 0.0f,
-	1.0f, -1.0f,  1.0f, 0.0f,
-
-	-1.0f,  1.0f,  0.0f, 1.0f,
-	1.0f, -1.0f,  1.0f, 0.0f,
-	1.0f,  1.0f,  1.0f, 1.0f
-};*/
 
 
 static struct nk_color table[NK_COLOR_COUNT];

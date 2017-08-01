@@ -14,6 +14,7 @@
 #include "GLHelpers.h"
 #include "aRenderer.h"
 #include "data.h"
+#include "fractal.h"
 
 
 /////////////////////////////////////////////////////////////////////////////////////////
@@ -37,7 +38,6 @@ public:
 	void keypressed(int key);
 
 	void logic();
-	void render();
 	void display();
 	void setFullscreen(bool fullscreen);
 
@@ -45,25 +45,19 @@ private:
 
 	///////////////////// Ressources
 
-	pointer<shader> program;
-	pointer<texture> colorMap;
 	AiSize tiles;
 	pointer<aRenderer> renderer;
-
+	pointer<fractal> fra;
 
 	///////////////////// Parameters
 
 	int targetFRate;
-	struct {
-		GLint iter, screenTexture, c, zoom, pos, coec, coe;
-		GLint layer;
-	} uniform;
 
-	float cx, cy, zoomx, zoomy, zoom, posx, posy;
-	int iter;
-	size_t coec;
-	float coe[MAX_POLY], coet[MAX_POLY];
-	int biasPower;
+	float zoomx, zoomy, zoom, posx, posy;
+
+//	size_t coec;
+//	float coe[MAX_POLY], coet[MAX_POLY];
+//	int biasPower;
 	int maxDensity;
 	float maxDensityI;
 
@@ -91,7 +85,7 @@ private:
 	GLFWwindow* window;
 	struct nk_context *ctx;
 
-	int show_about, show_polynomial, show_roots, show_tooltips;
+	int show_about, show_polynomial, show_roots;
 	int trace_length;
 
 	///////////////////// Temp / Debug

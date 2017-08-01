@@ -92,7 +92,7 @@ uint64 rTile::render(std::function<void(ARect tile)> content, AiSize tileSize, A
 }
 
 void rTile::setSampleCount(uint64 samples) {
-	fassert(samples <= rTile::getSize().area());
+	fassert(samples <= rTile::getSize().area()); // TODO: this doesn't hold true!
 	rTile::samples = samples;
 }
 

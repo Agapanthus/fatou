@@ -37,25 +37,25 @@ const string composerShader(
 	// If pixel[0].weight == 0.0f, then the value of the first Position should be copied without interpolation.
 	"uniform sampler2D interPM;"
 	"in vec2 TexCoords;"
-	"uniform int queue_r;"
+	"uniform int mesh_side;"
 	"layout(pixel_center_integer) in vec4 gl_FragCoord;"
 
 #ifdef USE_TEXEL_FETCH
 	"uniform int iteration;"
 #else
-	"uniform float inverse_queue_l_minus_one;"
+	"uniform float inverse_mesh_area_minus_one;"
 	"uniform float iteration;"
 #endif
 
 	"void main() {"
-	"	int x = int(gl_FragCoord.x) % queue_r;"
-	"	int y = int(gl_FragCoord.y) % queue_r;"
+	"	int x = int(gl_FragCoord.x) % mesh_side;"
+	"	int y = int(gl_FragCoord.y) % mesh_side;"
 #ifdef USE_TEXEL_FETCH
-	"	int layerAddress = (x + (queue_r*y)) * " + toString(INTERP_POINTS) + ";"
+	"	int layerAddress = (x + (mesh_side*y)) * " + toString(INTERP_POINTS) + ";"
 	"	vec4 p1 = texelFetch(interPM, ivec2(iteration, layerAddress), 0);"
 #else
-	//"	float layerAddress = (x + (queue_r*y)) * inverse_queue_l_minus_one;"
-	"	float layerAddress = (x + (queue_r*y)) / (24);"
+	//"	float layerAddress = (x + (mesh_side*y)) * inverse_mesh_area_minus_one;"
+	"	float layerAddress = (x + (mesh_side*y)) / (24);"
 	"	vec4 p1 = texture(interPM, vec2(iteration, layerAddress), 0);"
 #endif
 	// We don't need that. Due to lower resolution, sampler3D with GL_NEAREST does this automatically!
@@ -72,7 +72,7 @@ const string composerShader(
 	"		vec4 p3 = texelFetch(interPM, ivec2(iteration, layerAddress+2), 0);"
 	"		vec4 p4 = texelFetch(interPM, ivec2(iteration, layerAddress+3), 0);"
 #else
-	"		float layerStep = inverse_queue_l_minus_one / " + toString(INTERP_POINTS) + ";"
+	"		float layerStep = inverse_mesh_area_minus_one / " + toString(INTERP_POINTS) + ";"
 	"		vec4 p2 = texture(interPM, vec2(iteration, layerStep   + layerAddress), 0);"
 	"		vec4 p3 = texture(interPM, vec2(iteration, layerStep*2 + layerAddress), 0);"
 	"		vec4 p4 = texture(interPM, vec2(iteration, layerStep*3 + layerAddress), 0);"
@@ -106,19 +106,19 @@ const string composerShader(
 const string composerShader(
 	"uniform sampler3D tex;"
 	"in vec2 TexCoords;"
-	"uniform float queue_l;"
+	"uniform float mesh_area;"
 	"uniform float maxZ;"
 	"uniform ivec2 winSize;"
-	"uniform int queue_r;"
+	"uniform int mesh_side;"
 	"uniform vec2 scale;"
 
 	"void main() {"
 	// we use ceil(x)-1 instead of floor(x), because we want [n,n+1[ to become n, not ]n,n+1]
 	// The first column / row becomes therefor negative, but by using GL_CLAMP_TO_EDGE this isn't a problem!
 	// TODO: But... wait! Isn't this a bug? Doesn't this implicate that the first rects have one extra pixel? And which pixel is missing? In reality, there doesn't seem to be any duplicate pixels!! So, why is this working?!
-	"	int x = (int(ceil(winSize.x * TexCoords.x)) - 1) % queue_r;"
-	"	int y = (int(ceil(winSize.y * TexCoords.y)) - 1) % queue_r;"
-	"	float layer = (x + (queue_r*y)) / (queue_l-1);"
+	"	int x = (int(ceil(winSize.x * TexCoords.x)) - 1) % mesh_side;"
+	"	int y = (int(ceil(winSize.y * TexCoords.y)) - 1) % mesh_side;"
+	"	float layer = (x + (mesh_side*y)) / (mesh_area-1);"
 	"	if(layer > maxZ) layer = maxZ;"
 	//	"	gl_FragColor = texture(tex, vec3(TexCoords, layer))*0.0 + vec4(layer, layer,0.0f, 1.0f);\n"
 	"	gl_FragColor = texture(tex, vec3(TexCoords.x * scale.x , TexCoords.y * scale.y, layer));\n"
@@ -133,22 +133,22 @@ const string composerShader(
 	"uniform sampler3D tex;"
 #endif
 	"in vec2 TexCoords;"
-	"uniform float queue_l;"
+	"uniform float mesh_area;"
 	"uniform float maxZ;"
-	"uniform int queue_r;"
+	"uniform int mesh_side;"
 	"layout(pixel_center_integer) in vec4 gl_FragCoord;"
 
 	"void main() {"
-	"	int x = int(gl_FragCoord.x) % queue_r;"
-	"	int y = int(gl_FragCoord.y) % queue_r;"
+	"	int x = int(gl_FragCoord.x) % mesh_side;"
+	"	int y = int(gl_FragCoord.y) % mesh_side;"
 #ifdef USE_TEXTURE_ARRAY
-	"	float layer = queue_l*maxZ;"
-	"	layer = (x + (queue_r*y));"
+	"	float layer = mesh_area*maxZ;"
+	"	layer = (x + (mesh_side*y));"
 #else
-	"	float layer = (x + (queue_r*y)) / (queue_l-1);"
+	"	float layer = (x + (mesh_side*y)) / (mesh_area-1);"
 	"	if(layer > maxZ) layer = maxZ;"
 #endif
-	"	gl_FragColor = texture(tex, vec3(TexCoords.x , TexCoords.y, layer));\n"
+	"	gl_FragColor = texture(tex, vec3(TexCoords.x, TexCoords.y, layer));\n" // TODO: Maybe this is possible without dependant texture reads...? Maybe you can choose the layer using the geometry shader...?
 	"}");
 
 #endif
@@ -173,7 +173,7 @@ pBuffer::pBuffer(AiSize size) : size(0, 0), directionAware(true), beamCorrection
 
 	pBuffer::composer->use();
 	uniform.texture = pBuffer::composer->getUniform("tex");
-	uniform.queue_r = pBuffer::composer->getUniform("queue_r");
+	uniform.mesh_side = pBuffer::composer->getUniform("mesh_side");
 #ifdef USE_INTERPOLATION
 	uniform.interPM = pBuffer::composer->getUniform("interPM");
 	uniform.iteration = pBuffer::composer->getUniform("iteration");
@@ -183,10 +183,10 @@ pBuffer::pBuffer(AiSize size) : size(0, 0), directionAware(true), beamCorrection
 	//uniform.scale = pBuffer::composer->getUniform("scale");
 	//uniform.winSize = pBuffer::composer->getUniform("winSize");
 	uniform.maxZ = pBuffer::composer->getUniform("maxZ");
-	uniform.queue_l = pBuffer::composer->getUniform("queue_l");
+	uniform.mesh_area = pBuffer::composer->getUniform("mesh_area");
 #endif
 #ifndef USE_TEXEL_FETCH
-	uniform.inverse_queue_l_minus_one = pBuffer::composer->getUniform("inverse_queue_l_minus_one");
+	uniform.inverse_mesh_area_minus_one = pBuffer::composer->getUniform("inverse_mesh_area_minus_one");
 #endif
 	glUniform1i(uniform.texture, 0);
 
@@ -210,11 +210,11 @@ void pBuffer::scale(AiSize size) {
 
 		if (coeffBuffer.empty()) {
 			coeffBuffer.reset(new floatStorage(AiSize(pBuffer::mesh.area32(), pBuffer::mesh.area32() * INTERP_POINTS)));
-			recalculateCoeff(); // TODO: When changing QUEUE_LENGTH this needs to be rerun!
+			recalculateCoeff(); // TODO: When changing mesh_area this needs to be rerun!
 		}
 		else {
 			coeffBuffer->scale(AiSize(pBuffer::mesh.area32(), pBuffer::mesh.area32() * INTERP_POINTS));
-			recalculateCoeff(); // TODO: When changing QUEUE_LENGTH this needs to be rerun!
+			recalculateCoeff(); // TODO: When changing mesh_area this needs to be rerun!
 		}
 	}
 	pBuffer::size = size;
@@ -414,7 +414,6 @@ void pBuffer::recalculateCoeff() {
 	// Optionally, the algorithm will favour points which come from most different directions (to ignore points, which are "hidden" behind another).
 
 	// The last one (points[n][INTERP_POINTS-1]) is always the worst (the one with the largest dist)
-	//pointStruct points[MA][INTERP_POINTS];
 	vector<std::array<pointStruct, 4>> points;
 	points.resize(MA);
 	
@@ -441,11 +440,7 @@ void pBuffer::recalculateCoeff() {
 					const float offset = 1.2f;
 					APoint canNormal;
 					float nativeShadow = 1.0f;
-					//const float rAngle = 0.5f; // About 75 degrees
-					//const float rAngle2 = sqrtf(rAngle);
-
-				//	if (i == 5) cout << "\n" << toString(interPoint) << " " << toString(newPoint) << endl;
-
+				
 					searchNearbyTiles(points[lr].data(), permutationMap[i],
 						[&relative, &uInterest, &dist, &canNormal, &nativeShadow, interPoint, newPoint, point{ points[lr] }, i, offset, this](AiSize rel)->void {
 					
@@ -462,8 +457,6 @@ void pBuffer::recalculateCoeff() {
 								tInt *= (minimum(rAngle, (point[x].normVec - candidateNormal).magnitude())) / rAngle;
 							}
 						}
-					
-						//if (i == 5) cout << toString(rel) << " " << tInt << " " << toString(point[0].normVec) << " " << toString(candidateNormal) << " " << (point[0].normVec - candidateNormal).magnitude() << endl;
 					
 						fassert(tInt <= 1.0f);
 						float uInt = (offset - tInt) * dt;
@@ -491,8 +484,6 @@ void pBuffer::recalculateCoeff() {
 						}
 						else {
 							// Replace the worst with the new one!
-
-							// TODO: Is the code inside this scope correct? I didn't checked yet...
 
 							// We have five points. From the first four one (because the fifths is better per definitionem) remove the worst.
 							float worstUInt = 0.0f;
@@ -598,7 +589,6 @@ void pBuffer::recalculateCoeff() {
 					// Construct a beam, beginning at the centralpoint and going through the testPoint.
 					// Test (beginning at the testPoint), where this beam for the first time doesn't hit a tile. This is the distance for interpolation.
 
-					//int32 limit = int32(ceil(AiPoint(QUEUE_LENGTH_X, QUEUE_LENGTH_Y).magnitude()));
 					// To prevent irregular shapes:
 					int32 limit = int32(round((thisPoint.normVec * ASize(pBuffer::mesh)).magnitude()));
 					for (d = int32(floor(thisPoint.dist)); d < limit; d++) {
@@ -615,12 +605,10 @@ void pBuffer::recalculateCoeff() {
 						}
 						if (!found) break;
 					}
-				//	cout << d << " " << thisPoint.dist << endl;
 					fassert(d > 0);
 					fassert(d >= int32(floor(thisPoint.dist)));
 
-					// Calculate relevance
-					
+					// Calculate relevance					
 					fassert(pBuffer::mesh.w == pBuffer::mesh.h);
 					const float k = float(pBuffer::mesh.w);
 					points[lr][x].relevance = powf(2.0f, -thisPoint.dist * 12.3f  / (k / sqrtf(float(i + 1)) + float(d)) ) * thisPoint.shadow;
@@ -666,7 +654,7 @@ void pBuffer::recalculateCoeff() {
 			for (int32 y = 0; y < pBuffer::mesh.h; y++) {
 				cout << " |";
 				for (int32 x = 0; x < pBuffer::mesh.w; x++) {
-					int32 mLayer = INTERP_P2L(AiPoint(x, y)); // x + y*QUEUE_LENGTH_X;
+					int32 mLayer = INTERP_P2L(AiPoint(x, y)); // x + y*mesh_areaENGTH_X;
 					int32 u;
 					for (u = 0; u < pBuffer::mesh.area32(); u++) {
 						if (permutationMap[u] == mLayer) break;
@@ -728,8 +716,6 @@ void pBuffer::recalculateCoeff() {
 							// Calculate interest
 							float tInt = 1.0f;
 							for (int32 xz = 0; xz < INTERP_POINTS; xz++) {
-								//AiPoint lPoint(points[myIndex][xz].layer % QUEUE_LENGTH_R, points[myIndex][xz].layer / QUEUE_LENGTH_R);
-								//APoint vNormal = normal(relativeVector(somePoint, lPoint, points[myIndex][xz].relativePosition, AiSize(QUEUE_LENGTH_X, QUEUE_LENGTH_Y)));
 								APoint vNormal = points[myIndex][xz].normVec;
 								float rAngle = sqrtf(1.0f / points[myIndex][xz].dist);
 								tInt *= (minimum(rAngle, (vNormal - pNormal).magnitude())) / rAngle;
@@ -780,16 +766,16 @@ void pBuffer::recalculateCoeff() {
 				break;
 			}
 		}
+#endif
 	}
 		
-#endif
 
 	coeffBuffer->upload();
 }
 
 void pBuffer::draw(int x, int y, APoint pos, ASize zoom) {
 	// TODO: There's maybe a bug! The image sometimes jumps when beginning a new rendering cyclus...
-	// TODO: The zoom is juddery if the internal cashe size exceeds Full HD. (For example fullscreen + antialias). Two things to do: First: Reduce composer-target-size density. This makes composing faster and displaying more fluent! Second: Find out, how to make it fluent without first! Maybe a glFinish at the right place...?
+	// TODO: The zoom is juddery if the internal cashe size exceeds Full HD. (For example fullscreen + antialias). This is due to long composing times happening irregularily. Therefore, reducer composer-target-size density. This makes composing faster and displaying much more fluent! Also, make the fOptimizer smarter, that it can plan when to use compose! AND: use uniform array instead of texture for interpolation if possible! This will be probably faster!
 	// TODO: Diagramme mit puffer, pufferfüllung, pufferdichte, Framezeit, statischer Framezeit, dynamischer Framezeit, Ereigniszeit 
 	// TODO: Calibrate buffers, when algorithm is changing! Choose better rendering times!
 
@@ -808,6 +794,7 @@ void pBuffer::draw(int x, int y, APoint pos, ASize zoom) {
 	pBuffer::quad.draw(ARect(0.0f, 0.0f, 1.0f, 1.0f), tC );
 	
 	
+	// Not working anymore:
 #if 0
 	// To visualize, of which other pixels each composed pixel consists
 	if (x >= 0 && y >= 0) {
@@ -828,9 +815,9 @@ void pBuffer::draw(int x, int y, APoint pos, ASize zoom) {
 		float mposx = x / float(size.w);
 		float mposy = 1.0f - y / float(size.h);
 
-		int xz = (x % QUEUE_LENGTH_X);
-		int yz = QUEUE_LENGTH_Y - 1 - (y % QUEUE_LENGTH_Y);
-		int lr = xz + QUEUE_LENGTH_X*yz;
+		int xz = (x % pBuffer::mesh.w);
+		int yz = pBuffer::mesh.h - 1 - (y % pBuffer::mesh.h);
+		int lr = xz + pBuffer::mesh.w*yz;
 		const int iter = 13;
 		int value = 0;
 		white->use();
@@ -841,8 +828,8 @@ void pBuffer::draw(int x, int y, APoint pos, ASize zoom) {
 
 				if (coeffBuffer->get(iter, lr*INTERP_POINTS + value, 3) != 0.0f) {
 
-					int tx = int(coeffBuffer->get(iter, lr*INTERP_POINTS + value, 2)*QUEUE_LENGTH) % QUEUE_LENGTH_X;
-					int ty = int(coeffBuffer->get(iter, lr*INTERP_POINTS + value, 2)*QUEUE_LENGTH) / QUEUE_LENGTH_X;
+					int tx = int(coeffBuffer->get(iter, lr*INTERP_POINTS + value, 2)*pBuffer::mesh.area()) % pBuffer::mesh.w;
+					int ty = int(coeffBuffer->get(iter, lr*INTERP_POINTS + value, 2)*pBuffer::mesh.area()) / pBuffer::mesh.h;
 
 
 					if (lmposx != mposx || lmposy != mposy) {
@@ -916,7 +903,7 @@ uint64 pBuffer::render(uint64 inSamples, function<void(int)> renderF) {
 	{
 		glQuery q = gqt.create();
 #endif
-		// TODO: Improve performance by using Array Textures with Geometry shader (No FBO's!), not using Texel Fetch and composing less!  Use unfiroms instead of textures, when possible! Use downscaled composition!
+		// TODO: Improve performance by not using Texel Fetch and composing less! Use uniforms instead of textures, when possible! Use downscaled composition!
 		if (changed) // TODO: Composing is quite time consuming... Maybe it's a good idea to give some option like "compose at most 3 times per second" (HINT: Composing 4k takes between 8 and 60 ms on my Thinkpad T540p, depending on the number of layers and the number of interpolated texels)
 			pBuffer::compose();
 
@@ -942,18 +929,15 @@ void pBuffer::compose() {
 		glUniform1i(uniform.iteration, maximum(0, int32(pBuffer::currentBuffer) - 1));
 		//Sleep(50);
 #else
-		glUniform1f(uniform.iteration, maximum(0.0f, float(pBuffer::currentBuffer) - 1) / float(QUEUE_LENGTH));
-	//	cout << maximum(0.0f, float(pBuffer::currentBuffer) - 1) / float(QUEUE_LENGTH) << endl;
-		glUniform1f(uniform.inverse_queue_l_minus_one, 1.0f / float(QUEUE_LENGTH - 1));
+		glUniform1f(uniform.iteration, maximum(0.0f, float(pBuffer::currentBuffer) - 1) / float(pBuffer::mesh.area()));
+		glUniform1f(uniform.inverse_mesh_area_minus_one, 1.0f / float(pBuffer::mesh.area() - 1));
 #endif
 #else
-		glUniform1f(uniform.maxZ, maximum(0, int32(pBuffer::currentBuffer) - 1) / maximum(1.0f, float(QUEUE_LENGTH)));
-		glUniform1f(uniform.queue_l, float(QUEUE_LENGTH));
-		//glUniform2f(uniform.scale, float(size.w) / float(buffer->getSize().w*QUEUE_LENGTH_R), float(size.h) / float(buffer->getSize().h*QUEUE_LENGTH_R));
-		//glUniform2i(uniform.winSize, size.w, size.h);
+		glUniform1f(uniform.maxZ, maximum(0, int32(pBuffer::currentBuffer) - 1) / maximum(1.0f, float(pBuffer::mesh.area())));
+		glUniform1f(uniform.mesh_area, float(pBuffer::mesh.area()));
 #endif
 		fassert(pBuffer::mesh.w == pBuffer::mesh.h);
-		glUniform1i(uniform.queue_r, (pBuffer::mesh.w));
+		glUniform1i(uniform.mesh_side, (pBuffer::mesh.w));
 		
 		glErrors("pBuffer::composeUniform");
 
@@ -1001,7 +985,7 @@ void pBuffer::setPosition(APoint pos, ASize zoom) {
 /////////////////////////////////////////////////////////////////////////////////////////
 /*****************************[   Progressive Renderer  ]*******************************/
 
-pRenderer::pRenderer(AiSize size, float maxDensity1D) : size(size), maxDensity1D(maxDensity1D), samples(100), minQuality(1.0f,1.0f), fresh(false) {
+pRenderer::pRenderer(AiSize size, float maxDensity1D) : size(size), maxDensity1D(maxDensity1D), samples(100), minQuality(maxDensity1D/2.0f, maxDensity1D/2.0f), fresh(false) {
 	pRenderer::buffer.reset(new pBuffer(AiSize(int(ceil(size.w * maxDensity1D)), int(ceil(size.h*maxDensity1D)))));
 }
 
@@ -1037,7 +1021,6 @@ void pRenderer::draw(int x, int y) {
 }
 
 void pRenderer::view(APoint pos, ASize zoom, function<void(APoint, ASize)> viewF) {
-	// TODO: Zwei Puffer! Den zweiten erst zeigen, sobald der neue besser als der alte ist! Dadurch auch das Ruckeln entfernen!
 	// TODO: Wenn am Rand was gebraucht wird, nur diesen Randbereich neurendern!
 
 	if (pRenderer::targetP == pos && pRenderer::targetZ == zoom && 
