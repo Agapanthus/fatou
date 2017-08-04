@@ -266,10 +266,10 @@ inline float netDistanceExplicit(const AiSize &tile, const AiPoint &a, const AiP
 
 inline void pBuffer::initIdentity(int32 i, int32 lr) {
 #ifdef DISABLE_BRANCHING
-	coeffBuffer->set(i, permutationMap[l] * INTERP_POINTS + 0, 0.0f, 0.0f, normLayer(float(permutationMap[lr])), 1.0f);
-	coeffBuffer->set(i, permutationMap[l] * INTERP_POINTS + 1, 0.0f, 0.0f, normLayer(float(permutationMap[lr])), 0.0f);
-	coeffBuffer->set(i, permutationMap[l] * INTERP_POINTS + 2, 0.0f, 0.0f, normLayer(float(permutationMap[lr])), 0.0f);
-	coeffBuffer->set(i, permutationMap[l] * INTERP_POINTS + 3, 0.0f, 0.0f, normLayer(float(permutationMap[lr])), 0.0f);
+	coeffBuffer->set(i, permutationMap[lr] * INTERP_POINTS + 0, 0.0f, 0.0f, normLayer(float(permutationMap[lr])), 1.0f);
+	coeffBuffer->set(i, permutationMap[lr] * INTERP_POINTS + 1, 0.0f, 0.0f, normLayer(float(permutationMap[lr])), 0.0f);
+	coeffBuffer->set(i, permutationMap[lr] * INTERP_POINTS + 2, 0.0f, 0.0f, normLayer(float(permutationMap[lr])), 0.0f);
+	coeffBuffer->set(i, permutationMap[lr] * INTERP_POINTS + 3, 0.0f, 0.0f, normLayer(float(permutationMap[lr])), 0.0f);
 #else
 	coeffBuffer->set(i, permutationMap[lr] * INTERP_POINTS + 0, 0.0f, 0.0f, normLayer(float(permutationMap[lr])), 0.0f);
 #endif
@@ -307,7 +307,7 @@ template<typename L> inline void searchNearbyTiles(const pointStruct *const ps, 
 			// never double-use the same instance of a point!
 			bool found = false;
 			for (int32 r = 0; r < INTERP_POINTS; r++) {
-				if (ps[r].relativePosition == AiSize(float(xdist), float(ydist)) && ps[r].layer == layer) {
+				if (ps[r].relativePosition == AiSize(xdist, ydist) && ps[r].layer == layer) {
 					found = true;
 					break;
 				}

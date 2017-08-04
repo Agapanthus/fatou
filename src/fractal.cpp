@@ -42,8 +42,13 @@ const string triangleLayerSelector(
 	"}");
 #endif
 
+fractal::fractal(const string &script) : cx(0.00000001f), cy(3.0f), iter(100), biasPower(-40), AST(MAX_HASKELL_NODES) {
 
-fractal::fractal() : cx(0.00000001f), cy(3.0f), iter(100), biasPower(-40) {
+
+	fractal::setFunction(""); // script);
+
+	//////////////////////////////////////////////
+
 
 
 	for (size_t p = 0; p < MAX_POLY; p++) coe[p] = coet[p] = 0.0f;
@@ -88,6 +93,34 @@ fractal::fractal() : cx(0.00000001f), cy(3.0f), iter(100), biasPower(-40) {
 }
 
 
+
+void fractal::setFunction(const string &script) {
+	
+	// Testing
+
+	any main = AST.getNew();
+	main->cdr.set(42, ASExpr_symbol);
+	main->car.set(AST.getNew(5));
+
+	main->car.next()->car.next()->cdr.set(main);
+	main->car.next()->car.next()->car.next()->cdr.set(AST.getNew(2));
+
+	any tail = main->car.next()->car.next()->car.next();
+	AST.free(tail->car.next());
+	tail->car.set(AST.getNew(5));
+
+	cout << AST.print(main) << endl;
+	
+	cout << "done!" << endl;
+
+	AST.free(main);
+}
+
+void fractal::recompile() {
+	// TODO
+}
+
+
 void fractal::render(int32 layer) {
 	//glClear(GL_COLOR_BUFFER_BIT);
 	//glClearColor(0.0f, 0.0f, 1.0f, 1.0f);
@@ -116,6 +149,22 @@ void fractal::view(APoint p, ASize z) {
 
 bool fractal::nk(nk_context *ctx, tooltip &ttip) {
 	bool Change = false;
+
+
+	static const int32 max_box_len = 1024;
+	static char box_buffer[max_box_len];
+	string init = "Test";
+	static int32 box_len = init.length();
+	if(box_len == init.length()) 
+		strcpy_s(box_buffer, max_box_len, init.c_str());
+
+	nk_layout_row_dynamic(ctx, 120, 1);
+	nk_edit_string(ctx, NK_EDIT_BOX, box_buffer, &box_len, max_box_len, nk_filter_default);
+
+
+
+	////////////////
+
 
 	nk_layout_row_dynamic(ctx, 25, 1);
 	int iter = fractal::iter;

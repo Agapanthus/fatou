@@ -54,9 +54,9 @@ app::app(GLFWwindow *window, nk_context* ctx) :
 
 	glfwGetWindowSize(app::window, &(app::width), &(app::height));
 
-	fra.reset(new fractal());
+	fra.reset(new fractal(""));
 	
-	app::renderer.reset(new aRenderer(AiSize(app::width, app::height), tiles, app::maxDensityI, float(app::targetFRate), [this](int32 l)->void { app::fra->render(l); }));
+	app::renderer.reset(new aRenderer(AiSize(app::width, app::height), tiles, app::maxDensityI, float(app::targetFRate), [this](int32 lr)->void { app::fra->render(lr); }));
 	
 }
 
@@ -238,7 +238,7 @@ void app::logic() {
 
 			nk_layout_row_dynamic(ctx, 25, 1);
 			ttip.create(ctx, "High numbers of tiles reduce RAM consumption but are computationally more intense. This option is ignored while progressive rendering is used.");
-			nk_property_int(ctx, "Tiles:", 1, &(titlebar2), 1000, 10, titlebar2);
+			nk_property_int(ctx, "Tiles:", 1, &(titlebar2), 1000, 10, float(titlebar2));
 			// TODO
 
 			nk_tree_pop(ctx);

@@ -18,6 +18,10 @@
 /////////////////////////////////////////////////////////////////////////////////////////
 /*****************************[         Util            ]*******************************/
 
+extern AErrorCode opengl_fatalError, opengl_minorError, opengl_internalError, opengl_compileError;
+
+class OpenGLException : public AException { public: OpenGLException(const AErrorCode &code, const string &details = "") : AException(code, details) {} };
+
 void glErrors(const char* wheres);
 unsigned int gtimeGet();
 

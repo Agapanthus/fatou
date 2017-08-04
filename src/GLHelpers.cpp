@@ -14,10 +14,14 @@
 /////////////////////////////////////////////////////////////////////////////////////////
 /*****************************[         Util            ]*******************************/
 
+AErrorCode opengl_fatalError("opengl fatal"), opengl_minorError("opengl minor"), opengl_internalError("opengl internal"), opengl_compileError("opengl compile");
+
+
 void glErrors(const char* wheres) {
 	GLenum err;
 	while ((err = glGetError()) != GL_NO_ERROR) {
-		fatalNote(string("OpenGL-Error@") + string(wheres) + ": " + std::to_string((int32)err)); //TODO:  +" " + string((const char*)gluErrorString(err)));
+		//fatalNote(string("OpenGL-Error@") + string(wheres) + ": " + std::to_string((int32)err)); //TODO:  +" " + string((const char*)gluErrorString(err)));
+		throw OpenGLException(opengl_internalError, "@" + string(wheres) + "\ncode: " + toString(int32(err)));
 	}
 }
 
@@ -45,14 +49,14 @@ int getGPURAM() {
 /////////////////////////////////////////////////////////////////////////////////////////
 /*****************************[        Shader           ]*******************************/
 
-void debugShader(GLuint res) {
+void debugShader(GLuint res, string type) {
 	GLint log_length = 0;
 	if (glIsShader(res))
 		glGetShaderiv(res, GL_INFO_LOG_LENGTH, &log_length);
 	else if (glIsProgram(res))
 		glGetProgramiv(res, GL_INFO_LOG_LENGTH, &log_length);
 	else {
-		fatalNote("printlog: Not a shader or a program");
+		throw OpenGLException(opengl_fatalError, "shader::debugShader: Not a shader or a program");
 		return;
 	}
 	char* logs = (char*)malloc(log_length);
@@ -61,11 +65,10 @@ void debugShader(GLuint res) {
 	else if (glIsProgram(res))
 		glGetProgramInfoLog(res, log_length, NULL, logs);
 
-	fatalNote(logs);
-
+	string Logs(logs);
 	free(logs);
 
-	throw runtime_error("Failed to compile shader");
+	throw OpenGLException(opengl_compileError, "Failed to compile " + type + " shader. Error log:\n" + Logs);
 }
 
 shader::shader(const string &vertexShader, const string &fragmentShader, const string &geometryShader) {
@@ -74,26 +77,26 @@ shader::shader(const string &vertexShader, const string &fragmentShader, const s
 	
 	GLuint vshader = shader::upload(vertexShader, GL_VERTEX_SHADER);
 	if (!vshader)
-		throw runtime_error("Failed to load vertex shader");
+		throw OpenGLException(opengl_fatalError, "Failed to load vertex shader");
 	glAttachShader(shader::program, vshader);
 
 	if (geometryShader.length() > 0) {
 		GLuint gshader = shader::upload(geometryShader, GL_GEOMETRY_SHADER);
 		if (!gshader)
-			throw runtime_error("Failed to load geometry shader");
+			throw OpenGLException(opengl_fatalError, "Failed to load geometry shader");
 		glAttachShader(shader::program, gshader);
 	}
 	
 	GLuint fshader = shader::upload(fragmentShader, GL_FRAGMENT_SHADER);
 	if (!fshader)
-		throw runtime_error("Failed to load fragment shader");
+		throw OpenGLException(opengl_fatalError, "Failed to load fragment shader");
 	glAttachShader(shader::program, fshader);
 
 	glLinkProgram(shader::program);
 	GLboolean link_ok = GL_FALSE;
 	glGetProgramiv(shader::program, GL_LINK_STATUS, &link_ok);
 	if (!link_ok) {
-		debugShader(program);
+		debugShader(program, "linking");
 		glDeleteProgram(program);
 	}
 	glErrors("shader::construct");
@@ -111,7 +114,14 @@ GLuint shader::upload(const string &shader, GLenum shaderType) {
 	GLboolean compile_ok = GL_FALSE;
 	glGetShaderiv(res, GL_COMPILE_STATUS, &compile_ok);
 	if (compile_ok == GL_FALSE) {
-		debugShader(res);
+		string shader_name = "";
+		switch (shaderType) {
+		case GL_GEOMETRY_SHADER: shader_name = "geometry"; break;
+		case GL_VERTEX_SHADER: shader_name = "vertex"; break;
+		case GL_FRAGMENT_SHADER: shader_name = "fragment"; break;
+		default: shader_name = "unkown"; break;
+		}
+		debugShader(res, shader_name);
 		glDeleteShader(res);
 		return 0;
 	}
@@ -130,8 +140,7 @@ void shader::use() {
 
 GLint shader::getUniform(const string &name) {
 	GLint uniform = glGetUniformLocation(program, name.c_str());
-	if (uniform == -1)
-		fatalNote("Failed binding uniform " + name);
+	if (uniform == -1) throw OpenGLException(opengl_minorError, "Failed binding uniform " + name);
 	glErrors("shader::getuniform");
 	return uniform;
 }
@@ -161,7 +170,7 @@ texture::texture(const std::string &filen) {
 	std::vector<unsigned char> buffer, image;
 
 	std::ifstream file(filen, std::ios::in | std::ios::binary | std::ios::ate);
-	if (!file.good()) fatalNote("Texture not found!");
+	if (!file.good()) throw OpenGLException(opengl_fatalError, "Texture >>" + filen + "<< not found!");
 
 	//get filesize
 	std::streamsize size = 0;
@@ -179,9 +188,8 @@ texture::texture(const std::string &filen) {
 	unsigned long w, h;
 	int error = decodePNG(image, w, h, buffer.empty() ? 0 : &buffer[0], (unsigned long)buffer.size());
 
-	if (error != 0)
-		fatalNote("error: " + std::to_string(error));
-
+	if (error != 0) throw OpenGLException(opengl_fatalError, "Error reading png-file >>" + filen + "<<!");
+	
 	texture::init(image, w, h);
 }
 
@@ -329,40 +337,25 @@ syncBuffer::syncBuffer(AiSize iSize, bool useMipmap, GLenum quality, GLenum qual
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, syncBuffer::tex, 0);
 
-	//glGenRenderbuffers(1, &(syncBuffer::rbo));
-	//glBindRenderbuffer(GL_RENDERBUFFER, syncBuffer::rbo);
-	//glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, syncBuffer::iSize.w, syncBuffer::iSize.h); // use a single renderbuffer object for both a depth AND stencil buffer.
-	//glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, syncBuffer::rbo);
-	if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
-		fatalNote("Framebuffer is not complete!");
+	if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) 
+		throw OpenGLException(opengl_fatalError, "syncBuffer: Framebuffer is not complete!");
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 	glErrors("syncBuffer::construct");
 }
 
 void syncBuffer::scale(AiSize iSize, bool useMipmap) {
 	syncBuffer::iSize = iSize;
-
-//	glBindFramebuffer(GL_FRAMEBUFFER, syncBuffer::framebuffer);
-
+	
 	glBindTexture(GL_TEXTURE_2D, syncBuffer::tex);
 	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, syncBuffer::iSize.w, syncBuffer::iSize.h, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
 	if (useMipmap != syncBuffer::useMipmap) {
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, useMipmap ? GL_LINEAR_MIPMAP_LINEAR : syncBuffer::quality);
 		syncBuffer::useMipmap = useMipmap;
 	}
-
-	//glBindRenderbuffer(GL_RENDERBUFFER, syncBuffer::rbo);
-	//glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, syncBuffer::iSize.w, syncBuffer::iSize.h);
-	//glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, syncBuffer::rbo);
-//	if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
-//		fatalNote("Framebuffer is not complete!");
-
-//	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
 syncBuffer::~syncBuffer() {
 	glDeleteTextures(1, &(syncBuffer::tex));
-//	glDeleteRenderbuffers(1, &(syncBuffer::rbo));
 	glDeleteFramebuffers(1, &(syncBuffer::framebuffer));
 	glErrors("syncBuffer::destruct");
 }
@@ -458,7 +451,7 @@ syncBuffer3d::syncBuffer3d(AiSize iSize, uint32 depth, GLenum quality, GLenum qu
 	glFramebufferTexture(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, syncBuffer3d::tex, 0);
 	glErrors("syncBuffer3D::FramebufferTexture");
 	if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
-		fatalNote("Framebuffer (Framebuffer texture 3d) is not complete!");
+		throw OpenGLException(opengl_fatalError, "syncBuffer3d: Framebuffer is not complete!");
 #else
 	glGenFramebuffers(depth, framebuffers);
 
@@ -476,7 +469,7 @@ syncBuffer3d::syncBuffer3d(AiSize iSize, uint32 depth, GLenum quality, GLenum qu
 	//	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, syncBuffer::tex, 0);
 		glFramebufferTextureLayer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, syncBuffer3d::tex, 0, i);
 		if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
-			fatalNote("Framebuffer is not complete!");
+			throw OpenGLException(opengl_fatalError, "syncBuffer3d: Framebuffer " + toString(i) + " is not complete!");
 	}
 #endif
 

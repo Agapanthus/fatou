@@ -31,6 +31,7 @@ using std::ifstream;
 #endif
 
 #ifdef _DEBUG
+	#define DEBUG
 	#define _DEBUGONLY(PARAM) PARAM
 #else
 	#define _DEBUGONLY(PARAM)
@@ -105,9 +106,32 @@ template<typename T> inline T minimum(T a, T b) {
 /*****************************[     Error Handling       ]******************************/
 
 #include <exception>
-using std::runtime_error;
 
 typedef std::bad_alloc AAllocException;
+
+struct AErrorCode { 
+	AErrorCode(const std::string &name) { // Constructor creates unique error code!
+		static uint64 it = 0;
+		AErrorCode::code = it++;
+		AErrorCode::name = name;
+	}
+	uint64 code;
+	std::string name;
+
+	bool operator==(const AErrorCode& compare) {
+		return (AErrorCode::code == compare.code);
+	}
+	bool operator!=(const AErrorCode& compare) {
+		return (AErrorCode::code != compare.code);
+	}
+};
+
+class AException {
+public:
+	AException(const AErrorCode &code, const std::string &details) : details(details), code(code) {}
+	const std::string details;
+	const AErrorCode code;
+};
 
 #ifdef USE_ASSERTATIONS
 #include <assert.h>
@@ -128,7 +152,7 @@ inline int32 _fatalNote(std::string msg) {
 	case IDRETRY:
 		return 1;
 	default:*/
-		exit(-1);
+		//exit(-1);
 		return -1;
 	//}
 }

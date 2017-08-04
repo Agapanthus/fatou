@@ -83,8 +83,8 @@ int _main(int argc, char **argv) {
 			}
 		}
 	}
-	catch (const runtime_error &e) {
-		fatalNote(string("Runtime Error: ") + e.what());
+	catch (const AException &e) {
+		fatalNote(string("AException: ") + e.details + string("\ncode: ") + toString(e.code.code) + " (" + e.code.name +  ")");
 	}
 	catch (const std::exception &e) {
 		fatalNote(string("Exception: ") + e.what());
