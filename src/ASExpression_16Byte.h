@@ -167,8 +167,6 @@ public:
 		return result;
 	}
 
-
-	// TODO: Rings!
 	// recursively deletes all connected via car or cdr connected cells. recursion is ok.
 	inline void free(any parent) {
 		if (parent == nil) return;
