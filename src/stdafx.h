@@ -65,8 +65,8 @@ using namespace gl;
 #define NK_GLFW_GL3_MOUSE_GRABBING 1
 #define NK_INCLUDE_FONT_BAKING
 #define NK_INCLUDE_DEFAULT_FONT
-#include "../third_party/nuklear/nuklear.h"
-#include "../third_party/nuklear/nuklear_glfw_gl3.h"
+#include "../third_party/util/nuklear.h"
+#include "../third_party/util/nuklear_glfw_gl3.h"
 
 
 #ifdef OS_WIN

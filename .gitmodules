@@ -7,3 +7,6 @@
 [submodule "third_party/utfcpp"]
 	path = third_party/utfcpp
 	url = git://github.com/nemtrif/utfcpp.git
+[submodule "third_party/util"]
+	path = third_party/util
+	url = https://github.com/Agapanthus/fatou-util

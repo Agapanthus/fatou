@@ -12,8 +12,8 @@
 
 #define NK_IMPLEMENTATION
 #define NK_GLFW_GL3_IMPLEMENTATION
-#include "../third_party/nuklear/nuklear.h"
-#include "../third_party/nuklear/nuklear_glfw_gl3.h"
+#include "../third_party/util/nuklear.h"
+#include "../third_party/util/nuklear_glfw_gl3.h"
 
 
 /////////////////////////////////////////////////////////////////////////////////////////
