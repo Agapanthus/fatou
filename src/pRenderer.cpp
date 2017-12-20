@@ -161,10 +161,10 @@ pBuffer::pBuffer(AiSize size) : size(0, 0), directionAware(true), beamCorrection
 	pBuffer::buffers[1].reset(new syncBuffer(size, false, GL_LINEAR, GL_LINEAR));
 	pBuffer::readBuffer = 0;
 	pBuffer::writeBuffer = 0;
-	pBuffer::rPosition[0] = APoint(0.0f, 0.0f);
-	pBuffer::rPosition[1] = APoint(0.0f, 0.0f);
-	pBuffer::rZoom[0] = ASize(1.0f, 1.0f);
-	pBuffer::rZoom[1] = ASize(1.0f, 1.0f);
+	pBuffer::rPosition[0] = APointd(0.0, 0.0);
+	pBuffer::rPosition[1] = APointd(0.0, 0.0);
+	pBuffer::rZoom[0] = ASized(1.0, 1.0);
+	pBuffer::rZoom[1] = ASized(1.0, 1.0);
 
 	pBuffer::white.reset(new shader(mainVertexShader, whiteShader));
 	
@@ -773,24 +773,32 @@ void pBuffer::recalculateCoeff() {
 	coeffBuffer->upload();
 }
 
-void pBuffer::draw(int x, int y, APoint pos, ASize zoom) {
+void pBuffer::draw(int x, int y, APointd pos, ASized zoom) {
 	// TODO: There's maybe a bug! The image sometimes jumps when beginning a new rendering cyclus...
 	// TODO: The zoom is juddery if the internal cashe size exceeds Full HD. (For example fullscreen + antialias). This is due to long composing times happening irregularily. Therefore, reducer composer-target-size density. This makes composing faster and displaying much more fluent! Also, make the fOptimizer smarter, that it can plan when to use compose! AND: use uniform array instead of texture for interpolation if possible! This will be probably faster!
-	// TODO: Diagramme mit puffer, pufferfüllung, pufferdichte, Framezeit, statischer Framezeit, dynamischer Framezeit, Ereigniszeit 
+	// TODO: Diagramme mit puffer, pufferfuellung, pufferdichte, Framezeit, statischer Framezeit, dynamischer Framezeit, Ereigniszeit 
 	// TODO: Calibrate buffers, when algorithm is changing! Choose better rendering times!
 
-	if (pBuffer::currentBuffer > 0) {
+	
+	if (pBuffer::currentBuffer > 0) { 
 		pBuffer::readBuffer = pBuffer::writeBuffer;
 	}
 
+	// TODO: Wenn kein Frame verfügbar ist, sollte quickFill genutzt werden. Aber besser nichts zeichnen, als DEN FALSCHEN Puffer zeichnen!
+	else {
+	//	cout << "Auto-repair" << endl;
+		return; // Sipl
+	}
 
 	// Solving z2 * (t1 - 0.5) + p2 = z1 * (t2 - 0.5) + p1 for t2 with t1 = (0,0) or t2 = (1,1)
-	ASize t2_00((zoom * (-0.5f) + pos - pBuffer::rPosition[readBuffer]) / pBuffer::rZoom[readBuffer] + 0.5f);
-	ASize t2_11((zoom * (0.5f) + pos - pBuffer::rPosition[readBuffer]) / pBuffer::rZoom[readBuffer] + 0.5f);
+	ASized t2_00((zoom * (-0.5) + pos - pBuffer::rPosition[readBuffer]) / pBuffer::rZoom[readBuffer] + 0.5);
+	ASized t2_11((zoom * (0.5) + pos - pBuffer::rPosition[readBuffer]) / pBuffer::rZoom[readBuffer] + 0.5);
 	ARect tC(t2_00.w, t2_00.h, t2_11.w, t2_11.h);
 
+
+
 	pBuffer::buffers[readBuffer]->readFrom();
-	ARect e(0.0f, 0.0f, 1.0f, 1.0f);
+//	ARect e(0.0f, 0.0f, 1.0f, 1.0f);
 	pBuffer::quad.draw(ARect(0.0f, 0.0f, 1.0f, 1.0f), tC );
 	
 	
@@ -899,7 +907,8 @@ uint64 pBuffer::render(uint64 inSamples, function<void(int)> renderF) {
 		}
 #ifdef MEASURE_PERFORMANCE
 	}
-	if(changed)	cout << "Render: " << gqt.getTime() << " ms   ";
+	
+	//if(changed)	cout << "Render: " << gqt.getTime() << " ms   ";
 	{
 		glQuery q = gqt.create();
 #endif
@@ -909,7 +918,7 @@ uint64 pBuffer::render(uint64 inSamples, function<void(int)> renderF) {
 
 #ifdef MEASURE_PERFORMANCE
 	}
-	if (changed) cout << "Compose: " << gqt.getTime() << " ms" << endl;
+	//if (changed) cout << "Compose: " << gqt.getTime() << " ms" << endl;
 #endif
 	
 	return inSamples - samplesLeft;
@@ -955,6 +964,7 @@ void pBuffer::discard() {
 	pBuffer::posx = 0;
 	pBuffer::currentBuffer = 0;
 
+
 	// Only change the write buffer! The read buffer flips as soon as the quality of the other buffer is better or quickFill() is called!
 	SWITCH10(pBuffer::writeBuffer);
 	pBuffer::rPosition[pBuffer::writeBuffer] = pBuffer::rPosition[pBuffer::readBuffer];
@@ -977,7 +987,7 @@ void pBuffer::quickFill() {
 	// TODO
 }
 
-void pBuffer::setPosition(APoint pos, ASize zoom) {
+void pBuffer::setPosition(APointd pos, ASized zoom) {
 	pBuffer::rPosition[pBuffer::writeBuffer] = pos;
 	pBuffer::rZoom[pBuffer::writeBuffer] = zoom;
 }
@@ -1013,16 +1023,17 @@ uint64 pRenderer::getSampleCount() const {
 }
 
 void pRenderer::draw(int x, int y) {
-	fassert(realZ != ASize(0.0f, 0.0f));
-	fassert(targetZ != ASize(0.0f, 0.0f));
+	fassert(realZ != ASized(0.0, 0.0));
+	fassert(targetZ != ASized(0.0, 0.0));
 	
+//	cout  << targetP.x << " " << targetP.y << endl;
 	buffer->draw(x, y, targetP, targetZ);
 	// TODO: Improve drawing! We need the algorithm to pre-downscale the buffer when density > 4.0
 }
 
-void pRenderer::view(APoint pos, ASize zoom, function<void(APoint, ASize)> viewF) {
+void pRenderer::view(APointd pos, ASized zoom, function<void(APointd, ASized)> viewF) {
 	// TODO: Wenn am Rand was gebraucht wird, nur diesen Randbereich neurendern!
-
+	
 	if (pRenderer::targetP == pos && pRenderer::targetZ == zoom && 
 		(pRenderer::realZ != pRenderer::targetZ || pRenderer::realP != pRenderer::targetP)) {
 		pRenderer::fresh = true;
@@ -1051,7 +1062,7 @@ void pRenderer::view(APoint pos, ASize zoom, function<void(APoint, ASize)> viewF
 			pRenderer::fresh = false;
 		}
 
-		if (pRenderer::realZ == ASize(0.0f, 0.0f)) {
+		if (pRenderer::realZ == ASized(0.0, 0.0)) {
 			pRenderer::realZ = pRenderer::targetZ;
 			pRenderer::realP = pRenderer::targetP;
 			viewF(pRenderer::realP, pRenderer::realZ);
@@ -1067,6 +1078,8 @@ void pRenderer::view(APoint pos, ASize zoom, function<void(APoint, ASize)> viewF
 		}
 	}
 
+
+	
 	buffer->setPosition(pRenderer::realP, pRenderer::realZ);
 }
 

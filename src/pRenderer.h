@@ -40,13 +40,13 @@ public:
 
 	float getProgress();
 	void discard();
-	void draw(int x, int y, APoint pos, ASize zoom);
+	void draw(int x, int y, APointd pos, ASized zoom);
 	void compose();
 	uint64 render(uint64 samples, function<void(int)> renderF);
 
 	void quickFill();
 
-	void setPosition(APoint pos, ASize zoom);
+	void setPosition(APointd pos, ASized zoom);
 
 private:
 	//vector<pointer<syncBuffer>> buffers;
@@ -78,8 +78,8 @@ private:
 	glLine line;
 
 	pointer<syncBuffer> buffers[2];
-	APoint rPosition[2];
-	ASize rZoom[2];
+	APointd rPosition[2];
+	ASized rZoom[2];
 	size_t writeBuffer, readBuffer;
 
 	AiSize mesh;
@@ -98,7 +98,7 @@ public:
 	pRenderer(AiSize size, float maxDensity1D);
 	~pRenderer();
 
-	void view(APoint pos, ASize zoom, function<void(APoint, ASize)> viewF);
+	void view(APointd pos, ASized zoom, function<void(APointd, ASized)> viewF);
 
 	uint64 render(function<void(int)> renderF, bool discard);
 	void setSize(AiSize size, float maxDensity1D);
@@ -117,8 +117,8 @@ private:
 	uint64 samples;
 
 	// "real" value is the native value the shader is rendering with and "target" is the value visible to the user
-	ASize targetZ, realZ;
-	APoint targetP, realP;
+	ASized targetZ, realZ;
+	APointd targetP, realP;
 
 	ASize minQuality;
 

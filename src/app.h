@@ -53,7 +53,12 @@ private:
 
 	int targetFRate;
 
-	float zoomx, zoomy, zoom, posx, posy;
+	double zoomx, zoomy, zoom, posx, posy;
+
+	bool isNewton;
+	int doublePrec;
+
+	int preset;
 
 //	size_t coec;
 //	float coe[MAX_POLY], coet[MAX_POLY];

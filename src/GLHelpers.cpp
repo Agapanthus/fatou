@@ -106,7 +106,8 @@ GLuint shader::upload(const string &shader, GLenum shaderType) {
 	GLuint res = glCreateShader(shaderType);
 	const GLchar* sources[] = {
 		// Define GLSL version
-		"#version 330 core\n" // OpenGL 3.3
+		//"#version 330 core\n" // OpenGL 3.3
+		"#version 400 core\n" // OpenGL 4.0
 		,shader.c_str() };
 	glShaderSource(res, 2, sources, NULL);
 

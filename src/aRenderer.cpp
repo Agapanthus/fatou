@@ -49,6 +49,9 @@ void aRenderer::render(int x, int y, bool changed) {
 	bool didntUsedProgressive = !useProgressive;
 	useProgressive = !changed;
 
+	// TODO: ISt das so?
+	if (changed) didntUsedProgressive = true;
+
 	// Using the aRender instead of pRender after Changes which will not repeat in the following frames is good, because the aRenderer will present a preview Frame which can be shown while pRender still works on it's first Frame!
 	
 	if (aRenderer::useProgressive) {
@@ -109,13 +112,13 @@ float aRenderer::getFramerate() {
 	return aRenderer::optim->getFramerate();
 }
 
-void aRenderer::view(APoint pos, ASize zoom, function<void(APoint, ASize)> viewF) {
+void aRenderer::view(APointd pos, ASized zoom, function<void(APointd, ASized)> viewF) {
 	fassert(zoom.w != 0.0f);
 	fassert(zoom.h != 0.0f);
 
 	aRenderer::viewF = viewF;
 
-	if (aRenderer::realZ == ASize(0.0f,0.0f)) {
+	if (aRenderer::realZ == ASized(0.0,0.0)) {
 		aRenderer::viewF(pos, zoom);
 	}
 

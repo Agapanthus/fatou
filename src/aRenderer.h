@@ -31,10 +31,11 @@ public:
 	uint64 getSamplesPerFrame();
 	float getFramerate();
 
-	void view(APoint pos, ASize zoom, function<void(APoint, ASize)> viewF);
+	void view(APointd pos, ASized zoom, function<void(APointd, ASized)> viewF);
 
-protected:
+	// TODO: unsafe! make it protected!
 	pointer<fOptimizer> optim;
+protected:
 	AiSize windowSize;
 	float maxDensity1D;
 	AiSize tiles;
@@ -46,9 +47,9 @@ protected:
 	//pointer<offscreenctx<worker, workerMsg>> octx;
 	function<void(int)> renderF;
 
-	ASize realZ;
-	APoint realP;
-	function<void(APoint, ASize)> viewF;
+	ASized realZ;
+	APointd realP;
+	function<void(APointd, ASized)> viewF;
 
 	uint64 samplesRendered;
 };

@@ -22,9 +22,9 @@
 string basePath;
 inline string stripFilename(const string &path) {
 	if (path.length() == 0) return path;
-	int32 i;
+	size_t i;
 	for (i = path.length() - 1; path[i] != '\\' && path[i] != '/' && i >= 0; i--) {}
-	return path.substr(0, minimum(path.length(), i+1U));
+	return path.substr(0, minimum((size_t)path.length(), (size_t)(i+1U)));
 }
 
 #ifdef OS_WIN

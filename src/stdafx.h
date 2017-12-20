@@ -52,6 +52,7 @@ using std::move;
 // OpenGL
 #include <glbinding/gl32core/gl.h>
 #include <glbinding/Binding.h>
+//#include <glbinding/gl/extension.h> 
 using namespace gl;
 
 #define GLFW_INCLUDE_NONE

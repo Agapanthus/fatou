@@ -337,6 +337,74 @@ struct ASize {
 };
 typedef ASize APoint;
 
+
+struct ASized {
+	explicit ASized(AiSize in) : w(double(in.w)), h(double(in.h)) {}
+	ASized(double w, double h) : w(w), h(h) {}
+	ASized() : w(0.0), h(0.0) {}
+	union {
+		double x;
+		double w;
+	};
+	union {
+		double y;
+		double h;
+	};
+	inline bool operator==(const ASized& compare) const {
+		return ((w == compare.w) && (h == compare.h));
+	}
+	inline bool operator!=(const ASized& compare) const {
+		return ((w != compare.w) || (h != compare.h));
+	}
+	inline bool operator<=(const ASized& compare) const {
+		return ((w <= compare.w) && (h <= compare.h));
+	}
+	inline bool operator>(const ASized& compare) const {
+		return ((w > compare.w) && (h > compare.h));
+	}
+
+	inline ASized operator/(const ASized &div) const {
+		return ASized(ASized::w / div.w, ASized::h / div.h);
+	}
+	inline ASized operator+(const ASized &div) const {
+		return ASized(ASized::w + div.w, ASized::h + div.h);
+	}
+	inline ASized operator*(const ASized &div) const {
+		return ASized(ASized::w * div.w, ASized::h * div.h);
+	}
+	inline ASized operator-(const ASized &div) const {
+		return ASized(ASized::w - div.w, ASized::h - div.h);
+	}
+
+	inline ASized operator/(const double &div) const {
+		return ASized(ASized::w / div, ASized::h / div);
+	}
+	inline ASized operator+(const double &div) const {
+		return ASized(ASized::w + div, ASized::h + div);
+	}
+	inline ASized operator*(const double &div) const {
+		return ASized(ASized::w * div, ASized::h * div);
+	}
+	inline ASized operator-(const double &div) const {
+		return ASized(ASized::w - div, ASized::h - div);
+	}
+	inline ASized operator-() const {
+		ASized v;
+		v.x = -x;
+		v.y = -y;
+		return v;
+	}
+
+	inline double magnitude() const {
+		return sqrt(ASized::w*ASized::w + ASized::h*ASized::h);
+	}
+
+	inline double area() const {
+		return double(ASized::w)*ASized::h;
+	}
+};
+typedef ASized APointd;
+
 struct ARect {
 	ARect() : left(.0f), top(.0f), right(.0f), bottom(.0f) {}
 	ARect(float a) : left(a), top(a), right(a), bottom(a) {}

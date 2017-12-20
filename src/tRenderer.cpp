@@ -92,7 +92,7 @@ uint64 rTile::render(std::function<void(ARect tile)> content, AiSize tileSize, A
 }
 
 void rTile::setSampleCount(uint64 samples) {
-	fassert(samples <= rTile::getSize().area()); // TODO: this doesn't hold true!
+	//fassert(samples <= rTile::getSize().area()); // TODO: this doesn't hold true!
 	rTile::samples = samples;
 }
 
@@ -177,6 +177,9 @@ fOptimizer::fOptimizer(double targetFrameRate, float maxDensity1D)
 	lastSleep(0) {
 
 }
+void fOptimizer::reset() {
+	fOptimizer::inited = false;
+}
 void fOptimizer::hint(double factor) {
 	fOptimizer::changing *= factor;
 }
@@ -186,7 +189,7 @@ void fOptimizer::optimize(sRenderer *renderer, uint64 samplesRendered) {
 	// TODO: Automatically choose good depth for the pRenderer!
 
 	if (fOptimizer::inited == false) {
-		fOptimizer::aSamples = 1000;
+		fOptimizer::aSamples = 10000;
 		if (samplesRendered > 0) {
 			fOptimizer::inited = true;
 			fOptimizer::floatingTimePublic = fOptimizer::floatingTime = QPC::get();

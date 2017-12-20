@@ -23,7 +23,21 @@ const string viewtexture(
 	"}");
 
 
-const string mainFragmentShader(
+const string defaultFragmentEnding(
+	"	vec2 nz = normalize(z) * 0.4f + 0.5f;"
+	"	gl_FragColor = i >= (iter - 1) ? vec4(0.0) : (1 - vali / iter)*texture(screenTexture, nz);"
+	"	gl_FragColor.w = 1.0;"
+	"}"
+);
+
+const string defaultDeepFragmentEnding(
+	"	vec2 nz = normalize(vec2(float(z.x), float(z.y))) * 0.4f + 0.5f;"
+	"	gl_FragColor = i >= (iter - 1) ? vec4(0.0) : (1 - vali / iter)*texture(screenTexture, nz);"
+	"	gl_FragColor.w = 1.0;"
+	"}"
+);
+
+const string defaultFragmentBeginning(
 	"uniform sampler2D screenTexture;"
 	"in vec2 TexCoords;"
 
@@ -44,29 +58,76 @@ const string mainFragmentShader(
 	"void main() {"
 	"	vec2 z;"
 	"	vec2 tc = vec2(TexCoords[0], TexCoords[1]);"
+	"	z.x = zoom.x * (tc.x - 0.5f) + pos.x;"
+	"	z.y = zoom.y * (tc.y - 0.5f) + pos.y;"
+
+	"	int i;"
+);
+
+const string defaultDeepFragmentBeginning(
+	"uniform sampler2D screenTexture;"
+	"in vec2 TexCoords;"
+
+	"uniform int iter;"
+	"uniform dvec2 c, zoom, pos; "
+
+	"uniform double coe[" + std::to_string(MAX_POLY) + "];"
+	"uniform int coec;"
+
+	"\n"
+	"#define product(a, b) dvec2(a.x*b.x-a.y*b.y, a.x*b.y+a.y*b.x)\n"
+	"#define divide(a, b) dvec2(((a.x*b.x+a.y*b.y)/(b.x*b.x+b.y*b.y)),((a.y*b.x-a.x*b.y)/(b.x*b.x+b.y*b.y)))\n"
+	"#define magnitudeA(a) sqrt(2*a.x*a.x)\n"
+	"#define msizeA(a) 2*a.x*a.x\n" // Using them will result in quite interesting results!
+	"#define magnitude(a) sqrt(a.x*a.x+a.y*a.y)\n"
+	"#define msize(a) (a.x*a.x+a.y*a.y)\n"
+
+	"void main() {"
+	"	dvec2 z;"
+	"	dvec2 tc = dvec2(TexCoords[0], TexCoords[1]);"
 	"	z.x = zoom.x * (tc.x - 0.5) + pos.x;"
 	"	z.y = zoom.y * (tc.y - 0.5) + pos.y;"
 
 	"	int i;"
-	//#define MANDELBROT
-#ifdef MANDELBROT
-	"	vec2 p = coe[0]*0.0f + coec*0.0f + z;"
+);
+
+const string mainDeepFragmentShader(
+	defaultDeepFragmentBeginning +
+	"	float nu = 0.0f;"
 	"	for (i = 0; i<iter; i++) {"
-	"		p = product(p, p) + z;"
-	//	"		if (msizeA(p) > c.x) break;" // Looks like wool with bias == 2 
-	"		if (magnitude(p) > c.x) break;"
+	"		int ii;"
+	"		dvec2 f = dvec2(coe[0], 0.0);"
+	"		dvec2 ff = dvec2(0.0);"
+
+	"		dvec2 ex = dvec2(1.0, 0.0);"
+	"		for (ii = 1; ii <= coec; ii++) {"
+	"			if (coe[ii] != 0) ff += (coe[ii] * ii) * ex;"
+	"			ex = product(ex, z);"
+	"			if (coe[ii] != 0) f += coe[ii] * ex;"
+	"		}"
+	"		dvec2 dif = divide(f, ff);"
+	"		if (msize(dif) < c.x) {"
+	"			nu = log( log(float(msize(dif))) / log(float(c.x)) ) * 3.78418963391826f; "//log(float(coec)); " // TODO: Nothing serious. Needs to be improved!
+	"			break;"
+	"		}"
+	"		z -= dif;"
 	"	}"
-#else
+	"	float vali = (float(i+1) -  nu) * float(c.y);"
+	"	if (vali > float(iter)) vali = float(iter);"
+	+ defaultDeepFragmentEnding);
+
+const string mainFragmentShader(
+	defaultFragmentBeginning +
 #define Continuous_coloring
 #ifdef Continuous_coloring
 	"	float nu = 0.0f;"
 #endif	
 	"	for (i = 0; i<iter; i++) {"
 	"		int ii;"
-	"		vec2 f = vec2(coe[0], 0.0);"
-	"		vec2 ff = vec2(0.0);"
+	"		vec2 f = vec2(coe[0], 0.0f);"
+	"		vec2 ff = vec2(0.0f);"
 
-	"		vec2 ex = vec2(1.0, 0.0);"
+	"		vec2 ex = vec2(1.0f, 0.0f);"
 	"		for (ii = 1; ii <= coec; ii++) {"
 	"			if (coe[ii] != 0) ff += (coe[ii] * ii) * ex;"
 	"			ex = product(ex, z);"
@@ -76,24 +137,24 @@ const string mainFragmentShader(
 	"		if (msize(dif) < c.x) {"
 #ifdef Continuous_coloring
 	// Multiply with large Number and use msizeA to get really intresting lines!
-	"			nu = log( log(msize(dif)) / log(c.x) ) * 3.78418963391826; "//log(float(coec)); " // TODO: Nothing serious. Needs to be improved!
+	"			nu = log( log(msize(dif)) / log(c.x) ) * 3.78418963391826f; "//log(float(coec)); " // TODO: Nothing serious. Needs to be improved!
 #endif
 	"			break;"
 	"		}"
 	"		z -= dif;"
 	"	}"
-#endif
 #ifdef Continuous_coloring
-	"	float vali = (float(i) + 1.0f -  nu) * c.y;"
+	"	float vali = (float(i+1) -  nu) * c.y;"
 	"	if (vali > float(iter)) vali = float(iter);"
 #else
 	"	float vali = float(i)*c.y;"
 	"	if (vali > float(iter)) vali = float(iter);"
 #endif
-	"	vec2 nz = normalize(z) * 0.4f + 0.5f;"
-	"	gl_FragColor = i >= (iter - 1) ? vec4(0.0) : (1 - vali / iter)*texture(screenTexture, nz);"
-	"	gl_FragColor.w = 1.0;"
-	"}");
+	+ defaultFragmentEnding);
+
+
+
+//////////////////////////////
 
 const string mainVertexShader(
 	"layout (location = 0) in vec2 aPos;"

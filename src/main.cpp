@@ -11,6 +11,7 @@
 
 #include "stdafx.h"
 #include "app.h"
+#include "fractal.h"
 
 
 pointer<app> APP;
@@ -18,6 +19,13 @@ nk_context* ctx;
 static const bool doubleBuffered = false; // Double Buffered GUI at low framerates is a bad idea... // TODO: Can I make it dynamic? Swap buffer twice if frame rate is low?
 
 int _main(int argc, char **argv) {
+	/*{
+		fractal f("");
+
+	}
+	return 0;
+	*/
+
 	try {
 		glfwSetErrorCallback([](int e, const char *d) -> void { fatalNote(std::to_string(e) + " " + string(d)); });
 		glfwInit();
@@ -25,6 +33,8 @@ int _main(int argc, char **argv) {
 		glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
 		glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 		glfwWindowHint(GLFW_DOUBLEBUFFER, doubleBuffered ? true : false);
+
+	
 #ifdef __APPLE__
 		glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE); // uncomment this statement to fix compilation on OS X
 #endif
@@ -43,6 +53,7 @@ int _main(int argc, char **argv) {
 		glbinding::Binding::initialize(false); // only resolve functions that are actually used (lazy)
 		// TODO: Error Checking! Version Checking!
 
+		
 		///////////////////////////////////
 
 		ctx = nk_glfw3_init(window, NK_GLFW3_INSTALL_CALLBACKS);

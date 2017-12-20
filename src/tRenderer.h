@@ -74,6 +74,7 @@ public:
 	void setMaxDensity1D(float maxDensity1D);
 	uint64 getSamples() const;
 	float getFramerate() const;
+	void reset();
 private:
 	bool inited;
 	double targetFrameRate;

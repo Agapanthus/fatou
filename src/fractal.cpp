@@ -42,17 +42,21 @@ const string triangleLayerSelector(
 	"}");
 #endif
 
-fractal::fractal(const string &script) : cx(0.00000001f), cy(3.0f), iter(100), biasPower(-40), AST(MAX_HASKELL_NODES) {
+fractal::fractal(const string &script, const string &scriptd, double cy, int iter, int biasPower) :
+	cx(0.00000001), cy(cy), iter(iter), biasPower(biasPower), doublePrecision(false) {
+	//cx(0.00000001f), cy(3.0f), iter(100), biasPower(-40) {
 
 
 	fractal::setFunction(""); // script);
+
 
 	//////////////////////////////////////////////
 
 
 
-	for (size_t p = 0; p < MAX_POLY; p++) coe[p] = coet[p] = 0.0f;
+	for (size_t p = 0; p < MAX_POLY; p++) coe[p] = coet[p] = 0.0;
 
+	/*
 #if 1
 	coet[0] = -1.0f;
 	coet[1] = -1.0f;
@@ -68,15 +72,16 @@ fractal::fractal(const string &script) : cx(0.00000001f), cy(3.0f), iter(100), b
 
 	for (size_t p = 0; p < MAX_POLY; p++) coe[p] = coet[p];
 
+	*/
 
 	/////////////////////
 
 
 	colorMap.reset(new texture(basePath + "res/hue.png"));
 
-
+	
 #ifdef USE_TEXTURE_ARRAY
-	program.reset(new shader(mainVertexShaderRenamed, mainFragmentShader, triangleLayerSelector));
+	program.reset(new shader(mainVertexShaderRenamed, script, triangleLayerSelector));
 	uniform.layer = program->getUniform("lr");
 #else
 	program.reset(new shader(mainVertexShader, mainFragmentShader));
@@ -90,60 +95,110 @@ fractal::fractal(const string &script) : cx(0.00000001f), cy(3.0f), iter(100), b
 	uniform.coec = program->getUniform("coec");
 	program->use();
 	glUniform1i(uniform.screenTexture, 0);
+
+
+#ifdef USE_TEXTURE_ARRAY
+	programd.reset(new shader(mainVertexShaderRenamed, scriptd, triangleLayerSelector));
+	uniformd.layer = programd->getUniform("lr");
+#else
+	programd.reset(new shader(mainVertexShader, mainFragmentShader));
+#endif
+	uniformd.screenTexture = programd->getUniform("screenTexture");
+	uniformd.c = programd->getUniform("c");
+	uniformd.iter = programd->getUniform("iter");
+	uniformd.zoom = programd->getUniform("zoom");
+	uniformd.pos = programd->getUniform("pos");
+	uniformd.coe = programd->getUniform("coe");
+	uniformd.coec = programd->getUniform("coec");
+	programd->use();
+	glUniform1i(uniformd.screenTexture, 0);
 }
 
+void fractal::setDoublePrecision(bool dp) {
+	fractal::doublePrecision = dp;
+}
 
 
 void fractal::setFunction(const string &script) {
-	
-	// Testing
 
-	any main = AST.getNew();
-	main->cdr.set(42, ASExpr_symbol);
-	main->car.set(AST.getNew(5));
+	// TODO: Use this!s
 
-	main->car.next()->car.next()->cdr.set(main);
-	main->car.next()->car.next()->car.next()->cdr.set(AST.getNew(2));
+//	h.reset(new fHaskell(str));
 
-	any tail = main->car.next()->car.next()->car.next();
-	AST.free(tail->car.next());
-	tail->car.set(AST.getNew(5));
-
-	cout << AST.print(main) << endl;
-	
-	cout << "done!" << endl;
-
-	AST.free(main);
 }
-
+/*
 void fractal::recompile() {
 	// TODO
-}
+}*/
 
 
 void fractal::render(int32 layer) {
 	//glClear(GL_COLOR_BUFFER_BIT);
 	//glClearColor(0.0f, 0.0f, 1.0f, 1.0f);
 
-	program->use();
+	if (cx != pow(2.0, biasPower)) {
+		cx = pow(2.0, biasPower);
+	}
 
-	glUniform2f(uniform.c, cx, cy);
-	glUniform1i(uniform.iter, iter);
-	glUniform1fv(uniform.coe, MAX_POLY, coe);
-	glUniform1i(uniform.coec, coec);
+
+		if (fractal::doublePrecision) {
+
+			programd->use();
+
+			glErrors("use @ fractal::render d");
+
+			glUniform2d(uniformd.c, cx, cy);
+
+			glUniform1i(uniformd.iter, iter);
+			glUniform1dv(uniformd.coe, MAX_POLY, coe);
+			glUniform1i(uniformd.coec, (gl::GLint)coec);
 #ifdef USE_TEXTURE_ARRAY
-	glUniform1i(uniform.layer, layer);
+			glUniform1i(uniformd.layer, layer);
 #endif
-	glErrors("uniform");
+			glErrors("uniform @ fractal::render d");
 
-	colorMap->use(GL_TEXTURE0);
+			colorMap->use(GL_TEXTURE0);
+		}
+		else {
+
+			program->use();
+
+
+			for (size_t p = 0; p < MAX_POLY; p++) {
+				coef[p] = float(coe[p]);
+			}
+
+			glUniform2f(uniform.c, float(cx), float(cy));
+			glUniform1i(uniform.iter, iter);
+			glUniform1fv(uniform.coe, MAX_POLY, coef);
+			glUniform1i(uniform.coec, (gl::GLint)coec);
+#ifdef USE_TEXTURE_ARRAY
+			glUniform1i(uniform.layer, layer);
+#endif
+			glErrors("uniform @ fractal::reder f");
+
+			colorMap->use(GL_TEXTURE0);
+		}
+
+
 
 }
 
-void fractal::view(APoint p, ASize z) {
+void fractal::view(APointd p, ASized z) {
+
+	glErrors("fractal::preView");
+
 	program->use();
-	glUniform2f(uniform.zoom, z.w, z.h);
-	glUniform2f(uniform.pos, p.x, p.y);
+	glUniform2f(uniform.zoom, (float)z.w, (float)z.h);
+	glUniform2f(uniform.pos, (float)p.x, (float)p.y);
+
+	programd->use();
+	glUniform2d(uniformd.zoom, z.w, z.h);
+	glUniform2d(uniformd.pos, p.x, p.y);
+
+	glErrors("uniform @ fractal::view f");
+
+	glErrors("fractal::postView");
 }
 
 
@@ -151,7 +206,7 @@ bool fractal::nk(nk_context *ctx, tooltip &ttip) {
 	bool Change = false;
 
 
-	static const int32 max_box_len = 1024;
+/*	static const int32 max_box_len = 1024;
 	static char box_buffer[max_box_len];
 	string init = "Test";
 	static int32 box_len = init.length();
@@ -160,7 +215,7 @@ bool fractal::nk(nk_context *ctx, tooltip &ttip) {
 
 	nk_layout_row_dynamic(ctx, 120, 1);
 	nk_edit_string(ctx, NK_EDIT_BOX, box_buffer, &box_len, max_box_len, nk_filter_default);
-
+	*/
 
 
 	////////////////
@@ -168,7 +223,7 @@ bool fractal::nk(nk_context *ctx, tooltip &ttip) {
 
 	nk_layout_row_dynamic(ctx, 25, 1);
 	int iter = fractal::iter;
-	nk_property_int(ctx, "Iterations:", 1, &(iter), 1000, 10, iter * 0.001f + 0.03f);
+	nk_property_int(ctx, "Iterations:", 1, &(iter), 10000, 10, iter * 0.001f + 0.03f);
 	if (iter != fractal::iter) {
 		Change = true;
 		fractal::iter = iter;
@@ -176,10 +231,10 @@ bool fractal::nk(nk_context *ctx, tooltip &ttip) {
 
 	nk_layout_row_dynamic(ctx, 25, 1);
 	ttip.create(ctx, "Magnitudes below 2^bias are assumed to have converged. Too small values cause floating point errors! Use double precision for better quality!");
-	nk_property_int(ctx, "Bias:", -50, &biasPower, 10, 1, 0.1f);
-	if (cx != pow(2.0f, float(biasPower))) {
+	nk_property_double(ctx, "Bias:", -100.0, &biasPower, 10.0, 0.5, 0.1f);
+	if (cx != pow(2.0, double(biasPower))) {
 		Change = true;
-		cx = pow(2.0f, float(biasPower));
+		cx = pow(2.0, double(biasPower));
 	}
 
 	nk_layout_row_dynamic(ctx, 25, 1);
