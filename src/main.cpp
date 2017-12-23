@@ -13,12 +13,18 @@
 #include "app.h"
 #include "fractal.h"
 
+#include "fHaskell.h"
 
 pointer<app> APP;
 nk_context* ctx;
 static const bool doubleBuffered = false; // Double Buffered GUI at low framerates is a bad idea... // TODO: Can I make it dynamic? Swap buffer twice if frame rate is low?
 
 int _main(int argc, char **argv) {
+
+	fHaskell h;
+	Sleep(100000);
+	return 0;
+
 	/*{
 		fractal f("");
 

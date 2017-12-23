@@ -70,18 +70,18 @@ app::~app() {
 };
 
 void app::keypressed(int key) {
-	/*switch (key) {
-	case GLFW_KEY_LEFT:
-		supers *= 0.5f;
-		cout << supers << endl;
+	switch (key) {
+	case GLFW_KEY_P:
+		cout.precision(17);
+		cout << "Position: " << std::fixed << app::posx << " " << std::fixed << app::posy << endl << 
+			"Zoom: " << std::fixed << app::zoomx << " " << std::fixed << app::zoomy << endl;
 		break;
 	case GLFW_KEY_RIGHT:
-		supers *= 2.0f;
-		cout << supers << endl;
 		break;
 	}
-	app::buf1->scale(int(app::width*supers), int(app::height*supers), false);
-	*/
+	
+	//app::buf1->scale(int(app::width*supers), int(app::height*supers), false);
+	
 }
 
 void app::reshape(int w, int h) {
@@ -219,29 +219,6 @@ void app::logic() {
 				*/
 
 				app::isNewton = false;
-				/*
-				app::fra.reset(new fractal(
-					defaultFragmentBeginning +
-					"	vec2 p = coe[0]*0.0f + coec*0.0f + z;"
-					"	for (i = 0; i<iter; i++) {"
-					"		p = product(p, p) + z;"
-					"		if (magnitude(p) > c.x) break;"
-					"	}"
-
-
-					"	if(i > iter) gl_FragColor.w  = texture(screenTexture, vec2(0.0)).w; " // Always false
-
-					"	float log_zn = log(float(p.x*p.x + p.y*p.y)) * 0.5f;"
-				//	"	float nu = log(log_zn / log(2)) / log(2);"
-					"	float nu = log(log_zn * 1.44269504088896f) * 1.44269504088896f;"
-
-					"	float v = (float(i+1) -nu) *c.y * 0.02f; "
-					"	gl_FragColor = (i >= (iter - 1)) ? vec4(0.0f) : sin(vec4(v,v+1.0f,v+2.0f,0.0f))*0.4f + 0.5f;" // https://krazydad.com/tutorials/makecolors.php
-					"	gl_FragColor.w = 1.0f;"
-					"}"
-					, 3.0,1000,4));
-				*/
-
 				app::fra.reset(new fractal(
 					defaultFragmentBeginning +
 					"	vec2 p = coe[0]*0.0f + coec*0.0f + z;"
@@ -372,10 +349,10 @@ void app::logic() {
 						"	if (vali > float(iter)) vali = float(iter);"
 						+ defaultFragmentEnding, 
 						defaultDeepFragmentBeginning +
-						"	for (i = 0; i<iter; i++) {"
-						"		int ii;"
-						"		dvec2 f = dvec2(coe[0], 0.0);"
-						"		dvec2 ff = dvec2(0.0);"
+						R"(	for (i = 0; i<iter; i++) {
+								int ii;
+								dvec2 f = dvec2(coe[0], 0.0);
+								dvec2 ff = dvec2(0.0);)"
 
 						"		dvec2 ex = dvec2(1.0, 0.0);"
 						"		for (ii = 1; ii <= coec; ii++) {"
@@ -392,7 +369,7 @@ void app::logic() {
 						"	float vali = float(i)*float(c.y);"
 						"	if (vali > float(iter)) vali = float(iter);"
 						+ defaultDeepFragmentEnding,
-						3.0, 100, -40));
+						3.0, 120, -25));
 				//}
 				for (size_t p = 0; p < MAX_POLY; p++) app::fra->coet[p] = 0.0f;
 				app::fra->coet[0] = -1.0f;

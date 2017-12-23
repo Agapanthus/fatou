@@ -106,8 +106,10 @@ const string mainDeepFragmentShader(
 	"			if (coe[ii] != 0) f += coe[ii] * ex;"
 	"		}"
 	"		dvec2 dif = divide(f, ff);"
+	//"		if (msize(dif) < c.x) {" // TODO: This should be msize(f) not msize(dif), shouldn't it?
+	//"			nu = log( log(float(msize(dif))) / log(float(c.x)) ) * 3.78418963391826f; "//log(float(coec)); " // TODO: Nothing serious. Needs to be improved!
 	"		if (msize(dif) < c.x) {"
-	"			nu = log( log(float(msize(dif))) / log(float(c.x)) ) * 3.78418963391826f; "//log(float(coec)); " // TODO: Nothing serious. Needs to be improved!
+	"			nu = log( log(float(msize(dif))) / log(float(c.x)) ) * log(float(coec)); "
 	"			break;"
 	"		}"
 	"		z -= dif;"
